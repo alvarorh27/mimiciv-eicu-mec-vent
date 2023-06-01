@@ -65,7 +65,7 @@ final_dataset <- read.csv('C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/f
 print('Logistic Regression of mortality at 30 days')
 print(Sys.time())
 logreg_death30days <- glm(
-   death_30days ~ age + gender + hospital_stay_days + icu_stay_days + tbi_seq_1 + tbi_any_seq + anytrauma_seq_1 + anytrauma_any_seq + tbi_severe_seq1 + tbi_nonsevere_seq1 + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + prolonged_mec_vent + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min + gcs_motor + gcs_verbal + gcs_eyes + gcs_unable + sofa + respiration + coagulation + liver + cardiovascular + cns + renal,
+   death_30days ~ age + gender + hospital_stay_days + icu_stay_days + tbi_seq_1 + tbi_any_seq + anytrauma_seq_1 + anytrauma_any_seq + tbi_severe_seq1 + tbi_nonsevere_seq1 + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + prolonged_mec_vent + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min + gcs_motor + gcs_verbal + gcs_eyes + sofa + respiration + coagulation + liver + cardiovascular + cns + renal,
   data =  final_dataset,
   family=binomial())
 print(Sys.time())

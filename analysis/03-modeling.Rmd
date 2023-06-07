@@ -481,6 +481,9 @@ ggplot(final_dataset, aes(x = prolonged_mec_vent, y = death_30days, color = fact
   labs(x = "Prolonged Mechanical Ventilation", y = "Mortality at 30 Days", color = "Type of Trauma", title = "Interaction Effect of PMV and Type of Trauma on Death at 30 days") +
   theme_minimal()
 
+# Save the plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/interaction_pmv_traumatype_30days.png", width = 6, height = 4, dpi = 300)
+
 # Print Odds Ratio
 coef_pval_df_interactive_traumatype_death30days <- extract_coef_pval_OR(logreg_interactive_death30days_2)
 htmlTable(coef_pval_df_interactive_traumatype_death30days[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio for death at 30 days by interaction terms PMV and Trauma Types")
@@ -522,6 +525,9 @@ ggplot(coef_pval_df_interactive_traumatype_death30days_2,
   ggtitle('Mortality at 30 days. Interaction between PMV and Trauma Types') +
   theme_minimal() +
   theme(legend.text = element_text(size = 10), legend.spacing.y = unit(1, "cm"))
+
+# Save the plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/forestplot_pmv_traumatype_30days.png", width = 6, height = 4, dpi = 300)
 
 ```
 
@@ -576,6 +582,9 @@ ggplot(final_dataset, aes(x = prolonged_mec_vent, y = death_year, color = factor
   labs(x = "Prolonged Mechanical Ventilation", y = "Mortality at 1 year", color = "TBI", title = "Interaction Effect of TBI and PMV on Death at1 year") +
   theme_minimal()
 
+# Save the plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/interaction_pmv_traumatype_year.png", width = 6, height = 4, dpi = 300)
+
 # Print Odds Ratio
 coef_pval_df_interactive_tbiseq1_deathyear <- extract_coef_pval_OR(logreg_interactive_deathyear)
 htmlTable(coef_pval_df_interactive_tbiseq1_deathyear[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio for death at 1 Year by interaction terms PMV and TBI")
@@ -609,6 +618,9 @@ ggplot(coef_pval_df_interactive_tbiseq1_deathyear_2,
   ggtitle('Mortality at 1 year. Interaction between PMV and TBI') +
   theme_minimal() +
   theme(legend.text = element_text(size = 10), legend.spacing.y = unit(1, "cm"))
+
+# Save the plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/forestplot_pmv_traumatype_year.png", width = 6, height = 4, dpi = 300)
 
 
 ```

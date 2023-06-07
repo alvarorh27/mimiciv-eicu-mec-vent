@@ -53,7 +53,7 @@ extract_coef_pval_OR <- function(model) {
 #Load File
 
 ```{r}
-final_dataset <- read.csv('C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/final_dataset.csv')
+final_dataset <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/final_dataset.csv')
 ```
 
 
@@ -76,7 +76,7 @@ print(Sys.time())
 ```{r fig.height=16, fig.width=10}
 coef_pval_df_death30days_1 <- extract_coef_pval_OR(logreg_death30days)
 
-write.csv(coef_pval_df_death30days_1,'C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/oddsratio_death30days.csv')
+write.csv(coef_pval_df_death30days_1,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/oddsratio_death30days.csv')
 htmlTable(coef_pval_df_death30days_1[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio for death at 30 days")
 ```
 
@@ -180,7 +180,7 @@ ggplot(coef_pval_df_death30days_2,
 
 
 # Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimic_mec_vent/figures/oddsratio_death30days.png", width = 6, height = 4, dpi = 300)
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/oddsratio_death30days.png", width = 6, height = 4, dpi = 300)
 ```
 ## Model Performance
 
@@ -247,7 +247,7 @@ print(Sys.time())
 ```{r fig.height=16, fig.width=10}
 coef_pval_df_deathyear_1 <- extract_coef_pval_OR(logreg_deathyear)
 
-write.csv(coef_pval_df_deathyear_1,'C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/oddsratio_deathyear.csv')
+write.csv(coef_pval_df_deathyear_1,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/oddsratio_deathyear.csv')
 htmlTable(coef_pval_df_deathyear_1[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio for death at 1 Year")
 ```
 
@@ -351,7 +351,7 @@ ggplot(coef_pval_df_deathyear_2,
 
 
 # Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimic_mec_vent/figures/oddsratio_deathyear.png", width = 6, height = 4, dpi = 300)
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/oddsratio_deathyear.png", width = 6, height = 4, dpi = 300)
 ```
 
 ## Model Performance
@@ -546,10 +546,10 @@ coef_pval_df_death30days_tbi <- extract_coef_pval_OR(logreg_death30days_tbi)
 coef_pval_df_death30days_notbi <- extract_coef_pval_OR(logreg_death30days_notbi)
 
 # Write and print table with odds ratio
-write.csv(coef_pval_df_death30days_tbi,'C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/coef_pval_df_death30days_tbi.csv')
+write.csv(coef_pval_df_death30days_tbi,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/coef_pval_df_death30days_tbi.csv')
 htmlTable(coef_pval_df_death30days_tbi[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio of dataset with TBI")
 
-write.csv(coef_pval_df_death30days_notbi,'C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/coef_pval_df_death30days_notbi.csv')
+write.csv(coef_pval_df_death30days_notbi,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/coef_pval_df_death30days_notbi.csv')
 htmlTable(coef_pval_df_death30days_notbi[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio of dataset without TBI")
 ```
 
@@ -697,10 +697,10 @@ coef_pval_df_deathyear_tbi <- extract_coef_pval_OR(logreg_deathyear_tbi)
 coef_pval_df_deathyear_notbi <- extract_coef_pval_OR(logreg_deathyear_notbi)
 
 # Write and print table with odds ratio
-write.csv(coef_pval_df_deathyear_tbi,'C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/oddsratio_deathyear_tbi.csv')
+write.csv(coef_pval_df_deathyear_tbi,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/oddsratio_deathyear_tbi.csv')
 htmlTable(coef_pval_df_deathyear_tbi[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio of dataset with TBI")
 
-write.csv(coef_pval_df_deathyear_notbi,'C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/oddsratio_deathyear_notbi.csv')
+write.csv(coef_pval_df_deathyear_notbi,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/oddsratio_deathyear_notbi.csv')
 htmlTable(coef_pval_df_deathyear_notbi[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio of dataset without TBI")
 ```
 

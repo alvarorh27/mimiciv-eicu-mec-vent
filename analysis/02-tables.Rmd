@@ -18,7 +18,7 @@ library(knitr)
 #Load File
 
 ```{r}
-final_dataset <- read.csv('C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/final_dataset.csv')
+final_dataset <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/final_dataset.csv')
 ```
 
 # Table one. Stratified by Traumatic Brain Injury
@@ -64,7 +64,7 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
    kbl(caption = "Table 1 of base model: Traumatic Brain Injury" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimic_mec_vent/figures/table1_tbi.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/table1_tbi.jpg", zoom = 10)
 
 ```
 
@@ -112,7 +112,7 @@ table1_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
    kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>% 
-   save_kable("C:/Users/se_al/Documents/GitHub/mimic_mec_vent/figures/table1_pmv.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/table1_pmv.jpg", zoom = 10)
 ```
 
 # Table one. Stratified by Mortality at 30 days
@@ -159,7 +159,7 @@ table1_death30days<-print(CreateTableOne(vars = vars_in_table1, strata = stratif
    kbl(caption = "Table 1 of base model: Mortality at 30 days" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimic_mec_vent/figures/table1_death30days.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/table1_death30days.jpg", zoom = 10)
  
 ```
 
@@ -207,7 +207,7 @@ table1_deathyear<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyb
    kbl(caption = "Table 1 of base model: Mortality at 1 year" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimic_mec_vent/figures/table1_deathyear.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/table1_deathyear.jpg", zoom = 10)
 ```
 
 # Table one. Stratified by Traumatic Brain Injury and Prolonged Mechanical Ventilation
@@ -254,5 +254,5 @@ table1_tbi_and_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratif
    kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation" ,     align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimic_mec_vent/figures/table1_tbi_and_pmv.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/table1_tbi_and_pmv.jpg", zoom = 10)
 ```

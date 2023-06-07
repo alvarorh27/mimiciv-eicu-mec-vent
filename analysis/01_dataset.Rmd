@@ -280,25 +280,28 @@ gg_miss_var(total_dataset, show_pct=TRUE)
 # Columns NA filling
 total_dataset_clean <- total_dataset %>%
   mutate(
-##Column discharge_location is a non-dichotomous categorical variable. When having an NA and the patient died in-hospital, a "DIED" is filled. The other NAs are filled with the most frequent value using the mode.
+##Column discharge_location is a non-dichotomous categorical variable. When having an NA and the patient died in-hospital, a "DIED" is filled. The other NAs are filled with the most frequent value (mode) using the mode.
     discharge_location = ifelse(!is.na(discharge_location) & inhospital_death == 1, "DIED", discharge_location), 
     discharge_location = ifelse(is.na(discharge_location), modeest::mfv(discharge_location), discharge_location),
 ## Discontinuous variables related with severity scores: 
-### Glascow Coma Scale (GCS): gcs_motor, gcs_verbal, gcs_eyes are filled with the median (if the median is 0, it is filled with 1 as min value of GCS), and those 3 variables are added together to obtain gcs_min 
-    gcs_motor = as.integer(ifelse(is.na(gcs_motor), median(gcs_motor, na.rm=TRUE), gcs_motor)), 
-    gcs_motor = ifelse(gcs_motor==0, 1, gcs_motor),  
-    gcs_verbal = as.integer(ifelse(is.na(gcs_verbal), median(gcs_verbal, na.rm=TRUE), gcs_verbal)),
-    gcs_verbal = ifelse(gcs_verbal==0, 1, gcs_verbal), 
-    gcs_eyes = as.integer(ifelse(is.na(gcs_eyes), median(gcs_eyes, na.rm=TRUE), gcs_eyes)),
-    gcs_eyes = ifelse(gcs_eyes==0, 1, gcs_eyes), 
-    gcs_min = as.integer(gcs_motor + gcs_verbal + gcs_eyes), 
+### Glascow Coma Scale (GCS) 
+### All rows in MIMIC-IV with gcs_unable=1 also have gcs_verbal=0 (15287 rows). There are also 95 rows with gcs_unable=0 with gcs_verbal=0 (95 rows). Since all sub gcs variables must display a minimal value equal to 1, this is corrected. 
+    gcs_verbal = as.integer(ifelse(gcs_verbal==0, 1, gcs_verbal)),
+### gcs_motor, gcs_verbal, gcs_eyes missing values are filled with the mode
+    gcs_verbal = as.integer(ifelse(is.na(gcs_verbal), modeest::mfv(gcs_verbal, na_rm=TRUE), gcs_verbal)),
+    gcs_motor = as.integer(ifelse(is.na(gcs_motor), modeest::mfv(gcs_motor, na_rm=TRUE), gcs_motor)),
+    gcs_eyes = as.integer(ifelse(is.na(gcs_eyes), modeest::mfv(gcs_eyes, na_rm=TRUE), gcs_eyes)),
+# Fill the NA in tbi_seq_1 to avoid errors in next lines
+    tbi_seq_1 = ifelse(is.na(tbi_seq_1), 0, tbi_seq_1),
+### All 3 gcs variables are added together to obtain gcs_min, only when gcs_min is NA (530 rows, also with gcs_unable missing), whose gcs_min is filled completely based on mode; and patients with TBI and gcs_unable=1. Rows with gcs_unable=1 and not TBI has to maintain their 15 value. 
+    gcs_min = as.integer(ifelse(is.na(gcs_min) | (tbi_seq_1==1 & gcs_unable==1), gcs_motor + gcs_verbal + gcs_eyes, gcs_min)),
 ### SOFA: respiration, coagulation, liver, cardiovascular, cns and renal variables are filled with the median, and those 6 are added together to obtain SOFA
-    respiration = ifelse(is.na(respiration), median(respiration, na.rm=TRUE), respiration), 
-    coagulation = ifelse(is.na(coagulation), median(coagulation, na.rm=TRUE), coagulation), 
-    liver = ifelse(is.na(liver), median(liver, na.rm=TRUE), liver), 
-    cardiovascular = ifelse(is.na(cardiovascular), median(cardiovascular, na.rm=TRUE), cardiovascular), 
-    cns = ifelse(is.na(cns), median(cns, na.rm=TRUE), cns), 
-    renal = ifelse(is.na(renal), median(renal, na.rm=TRUE), renal), 
+    respiration = ifelse(is.na(respiration), median(respiration, na_rm=TRUE), respiration), 
+    coagulation = ifelse(is.na(coagulation), median(coagulation, na_rm=TRUE), coagulation), 
+    liver = ifelse(is.na(liver), median(liver, na_rm=TRUE), liver), 
+    cardiovascular = ifelse(is.na(cardiovascular), median(cardiovascular, na_rm=TRUE), cardiovascular), 
+    cns = ifelse(is.na(cns), median(cns, na_rm=TRUE), cns), 
+    renal = ifelse(is.na(renal), median(renal, na_rm=TRUE), renal), 
     sofa = as.integer(respiration + coagulation + liver + cardiovascular + cns + renal)) %>%
 ##The rest of the NA-containing columns are filled with a '0' value. These include dichotomous variables (inicu_death, death_30days, death_year, tbi_seq_1, tbi_any_seq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, mv_total_7days, mv_total_14days, mv_total_21days and prolonged_mec_vent), as well as discontinuous variables related with ventilation (consecutive_vm_days and total_vm_days)
   mutate_at(vars(10:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
@@ -400,6 +403,6 @@ final_dataset <- group_dataset_1 %>%
 # Export file
 
 ```{r}
-write.csv(final_dataset,'C:/Users/se_al/Documents/GitHub/mimic_mec_vent/data/final_dataset.csv', row.names = F)
+write.csv(final_dataset,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/final_dataset.csv', row.names = F)
 ```
 

@@ -65,7 +65,7 @@ final_dataset <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data
 print('Logistic Regression of mortality at 30 days')
 print(Sys.time())
 logreg_death30days <- glm(
-   death_30days ~ age + gender + hospital_stay_days + icu_stay_days + tbi_seq_1 + tbi_any_seq + anytrauma_seq_1 + anytrauma_any_seq + tbi_severe_seq1 + tbi_nonsevere_seq1 + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + prolonged_mec_vent + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min + gcs_motor + gcs_verbal + gcs_eyes + sofa + respiration + coagulation + liver + cardiovascular + cns + renal,
+   death_30days ~ age + gender + hospital_stay_days + icu_stay_days + tbi_seq_1 + tbi_any_seq + anytrauma_seq_1 + anytrauma_any_seq + tbi_severe_seq1 + tbi_nonsevere_seq1 + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + prolonged_mec_vent + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min,
   data =  final_dataset,
   family=binomial())
 print(Sys.time())
@@ -85,7 +85,7 @@ htmlTable(coef_pval_df_death30days_1[,c("term","OR","OR_CI_lower","OR_CI_upper")
 ```{r}
 coef_pval_df_death30days_2 <- coef_pval_df_death30days_1 %>% 
   mutate(orden = case_when(term == "age" ~ 1,
-                           term == "gender" ~ 2,
+                           term == "genderM" ~ 2,
                            term == "hospital_stay_days" ~ 3,
                            term == "icu_stay_days" ~ 4,
                            term == "tbi_seq_1" ~ 5,
@@ -109,29 +109,18 @@ coef_pval_df_death30days_2 <- coef_pval_df_death30days_1 %>%
                            term == "sapsii" ~ 23,
                            term == "sapsii_prob" ~ 24,
                            term == "gcs_min" ~ 25,
-                           term == "gcs_motor" ~ 26,
-                           term == "gcs_verbal" ~ 27,
-                           term == "gcs_eyes" ~ 28,
-                           term == "gcs_unable" ~ 29,
-                           term == "sofa" ~ 30,
-                           term == "respiration" ~ 31,
-                           term == "coagulation" ~ 32,
-                           term == "liver" ~ 33,
-                           term == "cardiovascular" ~ 34,
-                           term == "cns" ~ 35,
-                           term == "renal" ~ 36,
-                           term == "(Intercept)" ~ 37,
+                           term == "(Intercept)" ~ 26,
                            TRUE ~ 999),
          term = case_when(term == "age" ~ "Age (years)",
-                           term == "gender" ~ "Gender",
+                           term == "genderM" ~ "Gender (male)",
                            term == "hospital_stay_days" ~ "Lengh of hospital stay (days)",
                            term == "icu_stay_days" ~ "Lenght of ICU stay (days)",
-                           term == "tbi_seq_1" ~ "Traumatic Brain Injury as first diagnostics",
-                           term == "tbi_any_seq" ~ "Traumatic Brain Injury as any diagnostic order",
+                           term == "tbi_seq_1" ~ "TBI as first diagnostics",
+                           term == "tbi_any_seq" ~ "TBI as any diagnostic order",
                            term == "anytrauma_seq_1" ~ "Traumatism as first diagnostics",
                            term == "anytrauma_any_seq" ~ "Traumatism as any diagnostic order",
-                           term == "tbi_severe_seq1" ~ "Severe Traumatic Brain Injury as first diagnostics",
-                           term == "tbi_nonsevere_seq1" ~ "Non-severe Traumatic Brain Injury as first diagnostics",
+                           term == "tbi_severe_seq1" ~ "Severe TBI as first diagnostics",
+                           term == "tbi_nonsevere_seq1" ~ "Non-severe TBI as first diagnostics",
                            term == "consecutive_vm_days" ~ "Consecutive days with >6 hour ventilation",
                            term == "mv_consecutive_7days" ~ "PMV > consecutive 7 days",
                            term == "mv_consecutive_14days" ~ "PMV > consecutive 14 days",
@@ -146,18 +135,7 @@ coef_pval_df_death30days_2 <- coef_pval_df_death30days_1 %>%
                            term == "apsiii_prob" ~ "APSIII probability",
                            term == "sapsii" ~ "SAPSII",
                            term == "sapsii_prob" ~ "SAPSII probability",
-                           term == "gcs_min" ~ "Min GCS",
-                           term == "gcs_motor" ~ "GCS-motor",
-                           term == "gcs_verbal" ~ "GCS-verbal",
-                           term == "gcs_eyes" ~ "GCS-eyes",
-                           term == "gcs_unable" ~ "GCS-unable",
-                           term == "sofa" ~ "SOFA",
-                           term == "respiration" ~ "SOFA-respiration",
-                           term == "coagulation" ~ "SOFA-coagulation",
-                           term == "liver" ~ "SOFA-liver",
-                           term == "cardiovascular" ~ "SOFA-cardiovascular",
-                           term == "cns" ~ "SOFA-CNS",
-                           term == "renal" ~ "SOFA-renal",
+                           term == "gcs_min" ~ "GCS",
                            TRUE ~ term)) %>% 
   arrange(desc(orden)) %>% 
   select(-orden) %>% 
@@ -171,7 +149,7 @@ ggplot(coef_pval_df_death30days_2,
   geom_vline(xintercept=0, linewidth=1.2) +
   scale_x_discrete(expand = expansion(add = c(1, 0.8))) + 
   scale_y_continuous(expand = expansion(add = c(0.1, 0.1))) +
-  scale_y_log10(limits = c(0.01, 5)) +
+  scale_y_log10(limits = c(0.01, 22)) +
   coord_flip() +
   labs(y="Odds Ratio", x=NULL) +
   ggtitle('Mortality at 30 days') +
@@ -236,7 +214,7 @@ model_performance
 print('Logistic Regression of mortality at 1 year')
 print(Sys.time())
 logreg_deathyear <- glm(
-   death_year ~ age + gender + hospital_stay_days + icu_stay_days + tbi_seq_1 + tbi_any_seq + anytrauma_seq_1 + anytrauma_any_seq + tbi_severe_seq1 + tbi_nonsevere_seq1 + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + prolonged_mec_vent + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min + gcs_motor + gcs_verbal + gcs_eyes + gcs_unable + sofa + respiration + coagulation + liver + cardiovascular + cns + renal,
+   death_year ~ age + gender + hospital_stay_days + icu_stay_days + tbi_seq_1 + tbi_any_seq + anytrauma_seq_1 + anytrauma_any_seq + tbi_severe_seq1 + tbi_nonsevere_seq1 + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + prolonged_mec_vent + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min,
   data =  final_dataset,
   family=binomial())
 print(Sys.time())
@@ -256,7 +234,7 @@ htmlTable(coef_pval_df_deathyear_1[,c("term","OR","OR_CI_lower","OR_CI_upper")],
 ```{r}
 coef_pval_df_deathyear_2 <- coef_pval_df_deathyear_1 %>% 
   mutate(orden = case_when(term == "age" ~ 1,
-                           term == "gender" ~ 2,
+                           term == "genderM" ~ 2,
                            term == "hospital_stay_days" ~ 3,
                            term == "icu_stay_days" ~ 4,
                            term == "tbi_seq_1" ~ 5,
@@ -280,29 +258,18 @@ coef_pval_df_deathyear_2 <- coef_pval_df_deathyear_1 %>%
                            term == "sapsii" ~ 23,
                            term == "sapsii_prob" ~ 24,
                            term == "gcs_min" ~ 25,
-                           term == "gcs_motor" ~ 26,
-                           term == "gcs_verbal" ~ 27,
-                           term == "gcs_eyes" ~ 28,
-                           term == "gcs_unable" ~ 29,
-                           term == "sofa" ~ 30,
-                           term == "respiration" ~ 31,
-                           term == "coagulation" ~ 32,
-                           term == "liver" ~ 33,
-                           term == "cardiovascular" ~ 34,
-                           term == "cns" ~ 35,
-                           term == "renal" ~ 36,
-                           term == "(Intercept)" ~ 37,
+                           term == "(Intercept)" ~ 26,
                            TRUE ~ 999),
          term = case_when(term == "age" ~ "Age (years)",
-                           term == "gender" ~ "Gender",
+                           term == "genderM" ~ "Gender (male)",
                            term == "hospital_stay_days" ~ "Lengh of hospital stay (days)",
                            term == "icu_stay_days" ~ "Lenght of ICU stay (days)",
-                           term == "tbi_seq_1" ~ "Traumatic Brain Injury as first diagnostics",
-                           term == "tbi_any_seq" ~ "Traumatic Brain Injury as any diagnostic order",
+                           term == "tbi_seq_1" ~ "TBI as first diagnostics",
+                           term == "tbi_any_seq" ~ "TBI as any diagnostic order",
                            term == "anytrauma_seq_1" ~ "Traumatism as first diagnostics",
                            term == "anytrauma_any_seq" ~ "Traumatism as any diagnostic order",
-                           term == "tbi_severe_seq1" ~ "Severe Traumatic Brain Injury as first diagnostics",
-                           term == "tbi_nonsevere_seq1" ~ "Non-severe Traumatic Brain Injury as first diagnostics",
+                           term == "tbi_severe_seq1" ~ "Severe TBI as first diagnostics",
+                           term == "tbi_nonsevere_seq1" ~ "Non-severe TBI as first diagnostics",
                            term == "consecutive_vm_days" ~ "Consecutive days with >6 hour ventilation",
                            term == "mv_consecutive_7days" ~ "PMV > consecutive 7 days",
                            term == "mv_consecutive_14days" ~ "PMV > consecutive 14 days",
@@ -317,18 +284,7 @@ coef_pval_df_deathyear_2 <- coef_pval_df_deathyear_1 %>%
                            term == "apsiii_prob" ~ "APSIII probability",
                            term == "sapsii" ~ "SAPSII",
                            term == "sapsii_prob" ~ "SAPSII probability",
-                           term == "gcs_min" ~ "Min GCS",
-                           term == "gcs_motor" ~ "GCS-motor",
-                           term == "gcs_verbal" ~ "GCS-verbal",
-                           term == "gcs_eyes" ~ "GCS-eyes",
-                           term == "gcs_unable" ~ "GCS-unable",
-                           term == "sofa" ~ "SOFA",
-                           term == "respiration" ~ "SOFA-respiration",
-                           term == "coagulation" ~ "SOFA-coagulation",
-                           term == "liver" ~ "SOFA-liver",
-                           term == "cardiovascular" ~ "SOFA-cardiovascular",
-                           term == "cns" ~ "SOFA-CNS",
-                           term == "renal" ~ "SOFA-renal",
+                           term == "gcs_min" ~ "GCS",
                            TRUE ~ term)) %>% 
   arrange(desc(orden)) %>% 
   select(-orden) %>% 
@@ -342,7 +298,7 @@ ggplot(coef_pval_df_deathyear_2,
   geom_vline(xintercept=0, linewidth=1.2) +
   scale_x_discrete(expand = expansion(add = c(1, 0.8))) + 
   scale_y_continuous(expand = expansion(add = c(0.1, 0.1))) +
-  scale_y_log10(limits = c(0.1, 4)) +
+  scale_y_log10(limits = c(0.1, 21)) +
   coord_flip() +
   labs(y="Odds Ratio", x=NULL) +
   ggtitle('Mortality at 1 year') +
@@ -405,7 +361,7 @@ model_performance
 ## Interaction term PMV and TBI
 ```{r}
 # Fit a logistic regression model with interaction term
-logreg_interactive_death30days <- glm(death_30days ~ prolonged_mec_vent * tbi_seq_1, data = final_dataset, family = binomial)
+logreg_interactive_death30days <- glm(death_30days ~ prolonged_mec_vent * tbi_seq_1 + age + gender + hospital_stay_days + icu_stay_days + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min, data = final_dataset, family = binomial)
 
 # Print the model summary
 print('Model summary of logistic regression model with interaction term between PMV and TBI for death at 30 days')
@@ -435,11 +391,47 @@ coef_pval_df_interactive_tbiseq1_death30days_2 <- coef_pval_df_interactive_tbise
   mutate(orden = case_when(term == "prolonged_mec_vent" ~ 1,
                            term == "tbi_seq_1" ~ 2,
                            term == "prolonged_mec_vent:tbi_seq_1" ~ 3,
-                           term == "(Intercept)" ~ 4,
+                           term == "age" ~ 4,
+                           term == "genderM" ~ 5,
+                           term == "hospital_stay_days" ~ 6,
+                           term == "icu_stay_days" ~ 7,
+                           term == "consecutive_vm_days" ~ 18,
+                           term == "mv_consecutive_7days" ~ 19,
+                           term == "mv_consecutive_14days" ~ 20,
+                           term == "mv_consecutive_21days" ~ 21,
+                           term == "total_vm_days" ~ 22,
+                           term == "mv_total_7days" ~ 23,
+                           term == "mv_total_14days" ~ 24,
+                           term == "mv_total_21days" ~ 25,
+                           term == "mv_96traq" ~ 26,
+                           term == "apsiii" ~ 27,
+                           term == "apsiii_prob" ~ 28,
+                           term == "sapsii" ~ 29,
+                           term == "sapsii_prob" ~ 30,
+                           term == "gcs_min" ~ 31,
+                           term == "(Intercept)" ~ 32,
                            TRUE ~ 999),
          term = case_when(term == "prolonged_mec_vent" ~ "PMV",
                            term == "tbi_seq_1" ~ "TBI",
                            term == "prolonged_mec_vent:tbi_seq_1" ~ "TBI + PMV",
+                           term == "age" ~ "Age (years)",
+                           term == "genderM" ~ "Gender (male)",
+                           term == "hospital_stay_days" ~ "Lengh of hospital stay (days)",
+                           term == "icu_stay_days" ~ "Lenght of ICU stay (days)",
+                           term == "consecutive_vm_days" ~ "Consecutive days with >6 hour ventilation",
+                           term == "mv_consecutive_7days" ~ "PMV > consecutive 7 days",
+                           term == "mv_consecutive_14days" ~ "PMV > consecutive 14 days",
+                           term == "mv_consecutive_21days" ~ "PMV > consecutive 21 days",
+                           term == "total_vm_days" ~ "Total days with >6 hour ventilation",
+                           term == "mv_total_7days" ~ "PMV > 7 days in total",
+                           term == "mv_total_14days" ~ "PMV > 14 days in total",
+                           term == "mv_total_21days" ~ "PMV > 21 days in total",
+                           term == "mv_96traq" ~ "MV for 96h + traqueostomy",
+                           term == "apsiii" ~ "APSIII",
+                           term == "apsiii_prob" ~ "APSIII probability",
+                           term == "sapsii" ~ "SAPSII",
+                           term == "sapsii_prob" ~ "SAPSII probability",
+                           term == "gcs_min" ~ "GCS",
                            TRUE ~ term)) %>% 
   arrange(desc(orden)) %>% 
   select(-orden) %>% 
@@ -469,7 +461,7 @@ ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/forestplot_pmv_
 ## Interaction term PMV and trauma_type
 ```{r}
 # Fit a logistic regression model with interaction term
-logreg_interactive_death30days_2 <- glm(death_30days ~ prolonged_mec_vent * trauma_type, data = final_dataset, family = binomial)
+logreg_interactive_death30days_2 <- glm(death_30days ~ prolonged_mec_vent * trauma_type + age + gender + hospital_stay_days + icu_stay_days + consecutive_vm_days + mv_consecutive_7days + mv_consecutive_14days + mv_consecutive_21days + total_vm_days + mv_total_7days + mv_total_14days + mv_total_21days + mv_96traq + apsiii + apsiii_prob + sapsii + sapsii_prob + gcs_min, data = final_dataset, family = binomial)
 
 # Print the model summary
 print('Model summary of logistic regression model with interaction term between PMV and trauma type for death at 30 days')
@@ -502,8 +494,26 @@ coef_pval_df_interactive_traumatype_death30days_2 <- coef_pval_df_interactive_tr
                            term == "trauma_typetrauma_non_tbi" ~ 4,
                            term == "prolonged_mec_vent:trauma_typetbi_non_severe" ~ 5,
                            term == "prolonged_mec_vent:trauma_typetbi_severe" ~ 6,
-                           term == "prolonged_mec_vent:trauma_typetrauma_non_tbi	" ~ 7,
-                           term == "(Intercept)" ~ 8,
+                           term == "prolonged_mec_vent:trauma_typetrauma_non_tbi" ~ 7,
+                           term == "age" ~ 8,
+                           term == "genderM" ~ 9,
+                           term == "hospital_stay_days" ~ 10,
+                           term == "icu_stay_days" ~ 11,
+                           term == "consecutive_vm_days" ~ 12,
+                           term == "mv_consecutive_7days" ~ 13,
+                           term == "mv_consecutive_14days" ~ 14,
+                           term == "mv_consecutive_21days" ~ 15,
+                           term == "total_vm_days" ~ 16,
+                           term == "mv_total_7days" ~ 17,
+                           term == "mv_total_14days" ~ 18,
+                           term == "mv_total_21days" ~ 19,
+                           term == "mv_96traq" ~ 20,
+                           term == "apsiii" ~ 21,
+                           term == "apsiii_prob" ~ 22,
+                           term == "sapsii" ~ 23,
+                           term == "sapsii_prob" ~ 24,
+                           term == "gcs_min" ~ 25,
+                           term == "(Intercept)" ~ 26,
                            TRUE ~ 999),
          term = case_when(term == "prolonged_mec_vent" ~ "PMV",
                            term == "trauma_typetbi_non_severe" ~ "TBI-non severe",
@@ -512,6 +522,24 @@ coef_pval_df_interactive_traumatype_death30days_2 <- coef_pval_df_interactive_tr
                            term == "prolonged_mec_vent:trauma_typetbi_non_severe" ~ "PMV + TBI-non severe",
                            term == "prolonged_mec_vent:trauma_typetbi_severe" ~ "PMV + TBI-severe",
                            term == "prolonged_mec_vent:trauma_typetrauma_non_tbi" ~ "PMV + Trauma-not TBI",
+                           term == "age" ~ "Age (years)",
+                           term == "genderM" ~ "Gender (male)",
+                           term == "hospital_stay_days" ~ "Lengh of hospital stay (days)",
+                           term == "icu_stay_days" ~ "Lenght of ICU stay (days)",
+                           term == "consecutive_vm_days" ~ "Consecutive days with >6 hour ventilation",
+                           term == "mv_consecutive_7days" ~ "PMV > consecutive 7 days",
+                           term == "mv_consecutive_14days" ~ "PMV > consecutive 14 days",
+                           term == "mv_consecutive_21days" ~ "PMV > consecutive 21 days",
+                           term == "total_vm_days" ~ "Total days with >6 hour ventilation",
+                           term == "mv_total_7days" ~ "PMV > 7 days in total",
+                           term == "mv_total_14days" ~ "PMV > 14 days in total",
+                           term == "mv_total_21days" ~ "PMV > 21 days in total",
+                           term == "mv_96traq" ~ "MV for 96h + traqueostomy",
+                           term == "apsiii" ~ "APSIII",
+                           term == "apsiii_prob" ~ "APSIII probability",
+                           term == "sapsii" ~ "SAPSII",
+                           term == "sapsii_prob" ~ "SAPSII probability",
+                           term == "gcs_min" ~ "GCS",
                            TRUE ~ term)) %>% 
   arrange(desc(orden)) %>% 
   select(-orden) %>% 
@@ -525,7 +553,7 @@ ggplot(coef_pval_df_interactive_traumatype_death30days_2,
   geom_vline(xintercept=0, linewidth=1.2) +
   scale_x_discrete(expand = expansion(add = c(1, 0.8))) + 
   scale_y_continuous(expand = expansion(add = c(0.1, 0.1))) +
-  scale_y_log10(limits = c(0.01, 10)) +
+  scale_y_log10(limits = c(0.01, 26)) +
   coord_flip() +
   labs(y="Odds Ratio", x=NULL) +
   ggtitle('Mortality at 30 days. Interaction between PMV and Trauma Types') +

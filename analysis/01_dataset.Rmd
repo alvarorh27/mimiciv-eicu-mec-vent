@@ -2,13 +2,13 @@
 title: "01_dataset_creation"
 author: "Álvaro Ritoré"
 date: '`r format(Sys.Date(), "%B %d, %Y")`'
-output:
-  html_notebook:
-    code_folding: hide
-    number_sections: yes
-    theme: flatly
-    toc: yes
-    toc_float: yes
+# output:
+#   html_notebook:
+#     code_folding: hide
+#     number_sections: yes
+#     theme: flatly
+#     toc: yes
+#     toc_float: yes
 ---
 
 # Environment
@@ -191,6 +191,10 @@ total_dataset <- dataset_join %>%
     "inhospital_death" = hospital_expire_flag, #patient death within the given hospitalization
     "date_of_death" = dod, #date of death for the patient (out of hospital mortality is available for MIMIC-IV patients up to one year post-hospital discharge)
   )
+
+# Convert character-type variables to factor 
+total_dataset %<>%
+  mutate("gender" = as.factor(gender))
 
 # Convert time/date variables in proper format 
 total_dataset %<>%

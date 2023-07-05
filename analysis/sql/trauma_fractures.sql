@@ -5,16 +5,16 @@ WITH
     ROW_NUMBER() OVER (ORDER BY subject_id, hadm_id, seq_num) AS row_num,
     -- se ordena numéricamente toda la tabla;
     CASE
-      WHEN (icd_code LIKE 'S12____' OR icd_code LIKE 'S32____' OR icd_code LIKE 'S52____' OR icd_code LIKE 'S72____' OR icd_code LIKE 'S62____' OR icd_code LIKE 'S42____' OR icd_code LIKE 'S22____' OR icd_code LIKE 'S398___' OR icd_code LIKE 'S92____' OR icd_code LIKE 'S82____' OR icd_code LIKE 'S591___' OR icd_code LIKE 'S99____') AND (icd_code LIKE '______A' OR icd_code LIKE '______B' OR icd_code LIKE '______C') OR (icd_code BETWEEN '805' AND '82999') AND seq_num=1 THEN 'YES'
+      WHEN (icd_code LIKE 'S12____' OR icd_code LIKE 'S32____' OR icd_code LIKE 'S52____' OR icd_code LIKE 'S72____' OR icd_code LIKE 'S62____' OR icd_code LIKE 'S42____' OR icd_code LIKE 'S22____' OR icd_code LIKE 'S398___' OR icd_code LIKE 'S92____' OR icd_code LIKE 'S82____' OR icd_code LIKE 'S591___' OR icd_code LIKE 'S99____') AND (icd_code LIKE '______A' OR icd_code LIKE '______B' OR icd_code LIKE '______C') OR (icd_code BETWEEN '805' AND '82999') AND seq_num=1 THEN 1
     ELSE
-    'NO'
+    0
   END
     AS fractures_seq_1,
     -- New column: if you have TBI in seq_num=1 it appears as YES
     CASE
-      WHEN (icd_code LIKE 'S12____' OR icd_code LIKE 'S32____' OR icd_code LIKE 'S52____' OR icd_code LIKE 'S72____' OR icd_code LIKE 'S62____' OR icd_code LIKE 'S42____' OR icd_code LIKE 'S22____' OR icd_code LIKE 'S398___' OR icd_code LIKE 'S92____' OR icd_code LIKE 'S82____' OR icd_code LIKE 'S591___' OR icd_code LIKE 'S99____') AND (icd_code LIKE '______A' OR icd_code LIKE '______B' OR icd_code LIKE '______C' )OR (icd_code BETWEEN '805' AND '82999') AND seq_num>=1 THEN 'YES'
+      WHEN (icd_code LIKE 'S12____' OR icd_code LIKE 'S32____' OR icd_code LIKE 'S52____' OR icd_code LIKE 'S72____' OR icd_code LIKE 'S62____' OR icd_code LIKE 'S42____' OR icd_code LIKE 'S22____' OR icd_code LIKE 'S398___' OR icd_code LIKE 'S92____' OR icd_code LIKE 'S82____' OR icd_code LIKE 'S591___' OR icd_code LIKE 'S99____') AND (icd_code LIKE '______A' OR icd_code LIKE '______B' OR icd_code LIKE '______C' )OR (icd_code BETWEEN '805' AND '82999') AND seq_num>=1 THEN 1
     ELSE
-    'NO'
+    0
   END
     AS fractures_any_seq,
     -- New column: If you have TBI on any seq_num it appears as YES,
@@ -48,16 +48,16 @@ FROM (
       fractures_seq_1,
       fractures_any_seq
     HAVING
-      fractures_any_seq='YES'
-      OR fractures_seq_1='YES' -- to group when there are FRACTURES
+      fractures_any_seq=1
+      OR fractures_seq_1=1 -- to group when there are FRACTURES
     ORDER BY
       subject_id,
       hadm_id,
       fractures_seq_1))
 WHERE
   NOT (hadm_id=prev_hadm_id
-    AND fractures_seq_1='NO'
-    AND fractures_any_seq='YES') --look at word
+    AND fractures_seq_1=0
+    AND fractures_any_seq=1) --look at word
 ORDER BY
   subject_id,
   hadm_id

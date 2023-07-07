@@ -703,8 +703,6 @@ logreg_interactive_deathyear_2 <- glm(death_30days ~ prolonged_mec_vent * trauma
 print('Model summary of logistic regression model with interaction term between PMV and trauma type for death at 1 year')
 summary(logreg_interactive_deathyear_2)
 
-
-
 # Perform an analysis of variance (ANOVA) to test the significance of the interaction
 anova(logreg_interactive_deathyear_2, test = "Chisq")
 

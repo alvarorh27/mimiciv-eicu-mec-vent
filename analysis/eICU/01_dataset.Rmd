@@ -1,0 +1,466 @@
+---
+title: "01_dataset_creation"
+author: "Álvaro Ritoré"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+# output:
+#   html_notebook:
+#     code_folding: hide
+#     number_sections: yes
+#     theme: flatly
+#     toc: yes
+#     toc_float: yes
+---
+
+# Environment
+
+```{r message=FALSE, warning=FALSE}
+library(bigrquery)
+library(DBI)
+library(dplyr)
+library(summarytools)
+library(sqldf)
+library(tidyverse)
+library(nlme)
+library(zoo)
+library(tableone)
+library(readxl)
+library(feather)
+library(magrittr)
+library(MatchIt)
+library(kableExtra)
+library(ggplot2)
+library(naniar)
+library(modeest)
+```
+
+# BigQuery related functions
+
+This chunks creates the run_query and getSQL function.
+
+```{r}
+
+# Function that takes in a SQL command and runs it on BigQuery. This avoids the connection data in each iteration
+run_query<-function(query){
+  query_output<-dbGetQuery(con,query)
+  return(query_output)
+}
+
+# Function for reading SQL files from a folder
+getSQL <- function(filepath) {
+  con = file(filepath, "r")
+  sql.string <- ""
+  while (TRUE) {
+    line <- readLines(con, n = 1)
+    if (length(line) == 0) {
+      break
+    }
+    line <- gsub("\\t", " ", line)
+    if (grepl("--", line) == TRUE) {
+      line <- paste(sub("--", "/*", line), "*/")
+    }
+    sql.string <- paste(sql.string, line)
+  }
+  close(con)
+  return(sql.string)
+}
+```
+
+# Data Load
+
+Loading queries and extracting the data
+
+## Prolonged Mechanical Ventilation
+
+```{r}
+# Criterion of prolonged mechanical ventilation: highest number of consecutive days of mechanical ventilation six or more hours per day
+vm_consecutive_days <- run_query(getSQL("sql/eICU/vm_consecutive_days.sql"))
+
+# Criterion of prolonged mechanical ventilation: total consecutive or non-consecutive days of mechanical ventilation for six or more hours per day
+vm_total_days <- run_query(getSQL("sql/vm_total_days.sql"))
+
+# Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
+vm_and_traq <- run_query(getSQL("sql/vm_and_traq.sql"))
+```
+
+## Traumatisms
+
+```{r}
+#Traumatic Brain Injury
+tbi <- run_query(getSQL("sql/tbi.sql"))
+tbi %<>%
+  group_by(subject_id, hadm_id) %>%
+  summarize(
+    tbi_seq1=max(tbi_seq_1), 
+    tbi_anyseq=max(tbi_any_seq))
+
+# Data cleaning to group by hadm_id
+#General traumatisms
+trauma_general <- run_query(getSQL("sql/trauma_general.sql"))
+trauma_general %<>%
+  group_by(subject_id, hadm_id) %>%
+  summarize(
+    traumatic_general_seq_1=max(traumatic_general_seq_1), 
+    traumatic_general_any_seq=max(traumatic_general_any_seq))
+
+#Fractures
+trauma_fractures <- run_query(getSQL("sql/trauma_fractures.sql"))
+trauma_fractures %<>%
+  group_by(subject_id, hadm_id) %>%
+  summarize(
+    fractures_seq_1=max(fractures_seq_1),
+    fractures_any_seq=max(fractures_any_seq))
+
+#Luxations
+trauma_luxations <- run_query(getSQL("sql/trauma_luxations.sql"))
+trauma_luxations %<>%
+  group_by(subject_id, hadm_id) %>%
+  summarize(
+    luxation_seq_1=max(luxation_seq_1),
+    luxation_any_seq=max(luxation_any_seq))
+
+#Sprains
+trauma_sprains <- run_query(getSQL("sql/trauma_sprains.sql"))
+trauma_sprains %<>%
+  group_by(subject_id, hadm_id) %>%
+  summarize(
+    sprains_seq_1=max(sprains_seq_1),
+    sprains_any_seq=max(sprains_any_seq))
+
+#Burns
+trauma_burns <- run_query(getSQL("sql/trauma_burns.sql"))
+trauma_burns %<>%
+  group_by(subject_id, hadm_id) %>%
+  summarize(
+    burns_seq_1=max(burns_seq_1),
+    burns_any_seq=max(burns_any_seq))
+
+#Contusion
+trauma_contusion <- run_query(getSQL("sql/trauma_contusions.sql"))
+trauma_contusion %<>%
+  group_by(subject_id, hadm_id) %>%
+  summarize(
+    contusion_seq_1=max(contusion_seq_1),
+    contusion_any_seq=max(contusion_any_seq))
+
+```
+
+## Demographic information
+
+```{r}
+#Patients
+patients <- run_query(getSQL("sql/patients.sql"))
+
+#Admissions
+admissions <- run_query(getSQL("sql/admissions.sql"))
+
+#Stays in ICU
+icustays <- run_query(getSQL("sql/icustays.sql"))
+```
+
+## Severity scores
+
+```{r}
+#Acute Physiology Score (APS)
+apsiii <- run_query(getSQL("sql/apsiii.sql"))
+
+#Simplified Acute Physiology Score (SAPS)
+sapsii <- run_query(getSQL("sql/sapsii.sql"))
+
+#Glasgow Coma Scale (GCS)
+first_day_gcs <- run_query(getSQL("sql/first_day_gcs.sql"))
+
+#Sequential Organ Failure Assessment (SOFA)
+first_day_sofa <- run_query(getSQL("sql/first_day_sofa.sql"))
+```
+
+# Creation of Final Dataset
+
+## Joining across datasets
+
+```{r}
+# Join patients tables by subject_id
+dataset_join <- icustays %>%
+  left_join(patients, by = "subject_id")
+
+# Join tables by subject_id and hadm_id  
+dataset_join <- Reduce(function(...) merge(..., by = c("subject_id", "hadm_id"), all.x=TRUE, sort = TRUE), list(
+  dataset_join, 
+  admissions, 
+  tbi,
+  trauma_general, 
+  trauma_fractures, 
+  trauma_luxations, 
+  trauma_sprains, 
+  trauma_burns, 
+  trauma_contusion))
+  
+# Join tables by subject_id, hadm_id and stay_id (except first_day_gcs as it doesn't include hadm_id)
+dataset_join <- Reduce(function(...) merge(..., by = c("subject_id","hadm_id", "stay_id"), all.x=TRUE, sort = TRUE), list(
+  dataset_join,
+  vm_consecutive_days, 
+  vm_total_days,
+  vm_and_traq,
+  apsiii,
+  sapsii,
+  first_day_sofa
+))
+
+#Join first_day_gcs table
+dataset_join %<>%
+  left_join(first_day_gcs, by = c("subject_id", "stay_id"))
+
+```
+
+## Creation of new variables and adjustment
+
+```{r}
+# Convert columns names to lowercase
+names(dataset_join) <- tolower(names(dataset_join))
+
+# Rename columns for self-explanation purposes
+total_dataset <- dataset_join %>%
+  rename(
+    "age" = anchor_age,
+    "hosp_admittime" = admittime, #date and time the patient was admitted to the hospital
+    "icu_admittime" = intime, #date and time the patient was transferred into the ICU
+    "icu_outtime" = outtime, #date and time the patient was transferred out of the ICU
+    "inhospital_death" = hospital_expire_flag, #patient death within the given hospitalization
+    "date_of_death" = dod, #date of death for the patient (out of hospital mortality is available for MIMIC-IV patients up to one year post-hospital discharge)
+  )
+
+# Convert character-type variables to factor 
+total_dataset %<>%
+  mutate("gender" = as.factor(gender))
+
+# Convert time/date variables in proper format 
+total_dataset %<>%
+  mutate(
+    icu_outtime = as.POSIXct(as.character(icu_outtime), format = "%Y-%m-%d %H:%M:%S"),
+    date_of_death = as.Date(as.character(date_of_death), format = "%Y-%m-%d"),
+    inicu_death = as.integer(ifelse(difftime(as.Date(icu_outtime), date_of_death, units = "days") >= 0, 1, 0)))
+
+# Variables:
+## hospital_stay_days: length of stay for the given hospital stay
+## icu_stay_days: length of stay for the patient for the given ICU stay
+total_dataset %<>%
+  mutate(hospital_stay_days = round(as.numeric((difftime(dischtime, hosp_admittime, units = "hours"))/24), 2),
+         icu_stay_days = round(los, 2))
+
+# Variables death_30days (mortality at 30 days) and death_year (mortality at 1 year)
+total_dataset %<>%
+    mutate(
+    death_30days = as.integer(ifelse(difftime(date_of_death, hosp_admittime, units = "days") <= 30, 1, 0)),
+    death_year = as.integer(ifelse(difftime(date_of_death, hosp_admittime, units = "days") <= 365, 1, 0)
+    ))
+
+# Traumatism variables
+total_dataset %<>%
+  mutate(
+    anytrauma_seq1 = as.integer(ifelse(tbi_seq1 == 1 | contusion_seq_1 == 1 | fractures_seq_1 == 1 | traumatic_general_seq_1 == 1 | luxation_seq_1 == 1 | sprain_seq_1 == 1, 1, 0)),          
+    anytrauma_anyseq = as.integer(ifelse(tbi_anyseq == 1 | contusion_any_seq == 1 | fractures_any_seq == 1 | traumatic_general_any_seq == 1 | luxation_any_seq == 1 | sprain_any_seq == 1, 1, 0)),
+            )
+
+# Variables mv_14days (prolonged mechanical ventilation, criterion of 14 days) and mv_96traq (prolonged mechanical ventilation, criterion of 96h of ventilation + traqueostomy)
+total_dataset %<>%
+  mutate(
+    mv_consecutive_7days = as.integer(ifelse(consecutive_vm_days>=7, 1, 0)),
+    mv_consecutive_14days = as.integer(ifelse(consecutive_vm_days>=14, 1, 0)),
+    mv_consecutive_21days = as.integer(ifelse(consecutive_vm_days>=21, 1, 0)),
+    mv_total_7days = as.integer(ifelse(total_vm_days>=7, 1, 0)),
+    mv_total_14days = as.integer(ifelse(total_vm_days>=14, 1, 0)),
+    mv_total_21days = as.integer(ifelse(total_vm_days>=21, 1, 0)),
+    mv_96traq = as.integer(ifelse(!is.na(trach_time), 1, 0)),
+    prolonged_mec_vent = as.integer(ifelse((mv_consecutive_14days == 1 |
+                                             mv_96traq == 1), 1, 0
+    ))
+  )
+
+# Gravity scores variables
+total_dataset %<>%
+  mutate(
+    apsiii_prob = round(apsiii_prob*100, 2), 
+    sapsii_prob = round(sapsii_prob*100, 2)
+  )
+
+```
+
+## Selection of required columns
+
+```{r}
+
+# Select the desired columns and order the result
+total_dataset %<>% 
+  select(subject_id, hadm_id, stay_id, age, gender, icu_admittime, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, gcs_min, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
+  arrange(subject_id, icu_admittime)
+
+```
+
+## Addressing missingness
+
+```{r}
+# Map missingness in total_dataset before NA filling  
+##Columns with na values
+print('Columns in total_dataset having NAs')
+names(total_dataset)[colSums(is.na(total_dataset)) > 0]
+
+print('Nº of columns with na values')
+n_var_miss(total_dataset)
+
+##Plot columns and show descriptive table with NA values
+miss_summary_preclean <- miss_var_summary(total_dataset)
+miss_summary_preclean
+gg_miss_var(total_dataset, show_pct=TRUE)
+  
+```
+## NA filling
+```{r}
+# Columns NA filling
+total_dataset_clean <- total_dataset %>%
+  mutate(
+##Column discharge_location is a non-dichotomous categorical variable. When having an NA and the patient died in-hospital, a "DIED" is filled. The other NAs are filled with the most frequent value (mode) using the mode.
+    discharge_location = ifelse(!is.na(discharge_location) & inhospital_death == 1, "DIED", discharge_location), 
+    discharge_location = ifelse(is.na(discharge_location), modeest::mfv(discharge_location), discharge_location),
+## Discontinuous variables related with severity scores: 
+### Glascow Coma Scale (GCS) 
+### All rows in MIMIC-IV with gcs_unable=1 also have gcs_verbal=0 (15287 rows). There are also 95 rows with gcs_unable=0 with gcs_verbal=0 (95 rows). Since all sub gcs variables must display a minimal value equal to 1, this is corrected. 
+    gcs_verbal = as.integer(ifelse(gcs_verbal==0, 1, gcs_verbal)),
+### gcs_motor, gcs_verbal, gcs_eyes missing values are filled with the mode
+    gcs_verbal = as.integer(ifelse(is.na(gcs_verbal), modeest::mfv(gcs_verbal, na_rm=TRUE), gcs_verbal)),
+    gcs_motor = as.integer(ifelse(is.na(gcs_motor), modeest::mfv(gcs_motor, na_rm=TRUE), gcs_motor)),
+    gcs_eyes = as.integer(ifelse(is.na(gcs_eyes), modeest::mfv(gcs_eyes, na_rm=TRUE), gcs_eyes)),
+# Fill the NA in tbi_seq1 and tbi_anyseq to avoid errors in next lines
+    tbi_seq1 = ifelse(is.na(tbi_seq1), 0, tbi_seq1),
+    tbi_anyseq = ifelse(is.na(tbi_anyseq), 0, tbi_anyseq),
+### All 3 gcs variables are added together to obtain gcs_min, only when gcs_min is NA (530 rows, also with gcs_unable missing), whose gcs_min is filled completely based on mode; and patients with TBI and gcs_unable=1. Rows with gcs_unable=1 and not TBI has to maintain their 15 value. 
+    gcs_min = as.integer(ifelse(is.na(gcs_min) | (tbi_anyseq==1 & gcs_unable==1), gcs_motor + gcs_verbal + gcs_eyes, gcs_min)),
+### SOFA: respiration, coagulation, liver, cardiovascular, cns and renal variables are filled with the median, and those 6 are added together to obtain SOFA
+    respiration = ifelse(is.na(respiration), median(respiration, na_rm=TRUE), respiration), 
+    coagulation = ifelse(is.na(coagulation), median(coagulation, na_rm=TRUE), coagulation), 
+    liver = ifelse(is.na(liver), median(liver, na_rm=TRUE), liver), 
+    cardiovascular = ifelse(is.na(cardiovascular), median(cardiovascular, na_rm=TRUE), cardiovascular), 
+    cns = ifelse(is.na(cns), median(cns, na_rm=TRUE), cns), 
+    renal = ifelse(is.na(renal), median(renal, na_rm=TRUE), renal), 
+    sofa = as.integer(respiration + coagulation + liver + cardiovascular + cns + renal)) %>%
+##The rest of the NA-containing columns are filled with a '0' value. These include dichotomous variables (inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, mv_total_7days, mv_total_14days, mv_total_21days and prolonged_mec_vent), as well as discontinuous variables related with ventilation (consecutive_vm_days and total_vm_days)
+  mutate_at(vars(10:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
+
+```
+
+## Confirm 0% missingness
+```{r}
+# Map missingness in total_dataset_clean after NA filling  
+##Columns with na values
+print('Columns in total_dataset_clean having NAs')
+names(total_dataset_clean)[colSums(is.na(total_dataset_clean)) > 0]
+
+print('Nº of columns with na values')
+n_var_miss(total_dataset_clean)
+
+##Plot columns and show descriptive table with NA values
+miss_summary_postclean <- miss_var_summary(total_dataset_clean)
+miss_summary_postclean
+gg_miss_var(total_dataset_clean, show_pct=TRUE)
+  
+```
+## Creation of additional variables
+```{r}
+# Create variable tbi severe and non-severe tbi, as well as trauma_type, containing 4 types of trauma in our dataset: TBI, general traumatism without TBI, severe TBI, non-severe TBI, for both seq1 and anyseq 
+total_dataset_clean %<>%
+  mutate(
+    tbi_severe_seq1 = ifelse(tbi_seq1 == 1 & gcs_min <= 8, 1, 0),
+    tbi_nonsevere_seq1 = ifelse(tbi_seq1 == 1 &
+                                  gcs_min > 8, 1, 0),
+    trauma_type_seq1 = as.factor(
+      ifelse(anytrauma_seq1 == 0, "non_trauma",
+             ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "trauma_non_tbi",
+                    ifelse(tbi_severe_seq1 == 1, "tbi_severe",
+                           ifelse(tbi_nonsevere_seq1 == 1, "tbi_non_severe", NA)))
+      )
+    ),
+    tbi_severe_anyseq = ifelse(tbi_anyseq == 1 & gcs_min <= 8, 1, 0),
+    tbi_nonsevere_anyseq = ifelse(tbi_anyseq == 1 &
+                                  gcs_min > 8, 1, 0),
+    trauma_type_anyseq = as.factor(
+      ifelse(anytrauma_anyseq == 0, "non_trauma",
+             ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "trauma_non_tbi",
+                    ifelse(tbi_severe_anyseq == 1, "tbi_severe",
+                           ifelse(tbi_nonsevere_anyseq == 1, "tbi_non_severe", NA)))
+      )
+    )
+  )
+
+# Select and order columns
+total_dataset_clean %<>% 
+  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, consecutive_vm_days:renal) %>%
+  arrange(subject_id, icu_admittime)
+```
+
+
+## Final Dataset
+```{r}
+# Group all stay_id within joint hospital admissions
+
+#Summarizing variables into hadm_id groups
+group_dataset_1 <- total_dataset_clean %>%
+  group_by(subject_id, hadm_id) %>%
+  arrange (icu_admittime) %>% 
+  summarize(
+    age=min(age), 
+    gender=first(gender), 
+    icu_admittime=min(icu_admittime), 
+    hospital_stay_days=first(hospital_stay_days),
+    icu_stay_days=sum(icu_stay_days), 
+    discharge_location=last(discharge_location),
+    inhospital_death=max(inhospital_death), 
+    inicu_death=max(inicu_death), 
+    death_30days=max(death_30days), 
+    death_year=max(death_year), 
+    tbi_seq1=first(tbi_seq1), 
+    tbi_anyseq=first(tbi_anyseq), 
+    anytrauma_seq1=first(anytrauma_seq1),
+    anytrauma_anyseq=first(anytrauma_anyseq),
+    tbi_severe_seq1=first(tbi_severe_seq1), 
+    tbi_nonsevere_seq1=first(tbi_nonsevere_seq1),
+    trauma_type_seq1=first(trauma_type_seq1),
+    tbi_severe_anyseq=first(tbi_severe_anyseq), 
+    tbi_nonsevere_anyseq=first(tbi_nonsevere_anyseq),
+    trauma_type_anyseq=first(trauma_type_anyseq),
+    consecutive_vm_days=max(consecutive_vm_days), 
+    mv_consecutive_7days=max(mv_consecutive_7days), 
+    mv_consecutive_14days=max(mv_consecutive_14days),
+    mv_consecutive_21days=max(mv_consecutive_21days),
+    total_vm_days=sum(total_vm_days), 
+    mv_total_7days = ifelse(total_vm_days>=7, 1, 0),
+    mv_total_14days = ifelse(total_vm_days>=14, 1, 0),
+    mv_total_21days = ifelse(total_vm_days>=21, 1, 0),
+    mv_96traq=max(mv_96traq), 
+    prolonged_mec_vent=max(prolonged_mec_vent), 
+          ) %>%
+    arrange(subject_id)
+
+#Select severity scores related to first stay_id. It must be noted that stay_id in MIMIC-IV are not necessarily ordered numerically, so we order by ICU admission time.  
+group_dataset_2 <- total_dataset_clean %>%
+  group_by(subject_id, hadm_id) %>%
+  arrange (icu_admittime) %>% 
+  filter(row_number()==1) %>%
+  select(apsiii:renal) %>%
+  arrange(subject_id)
+
+#Merging two grouped datasets
+final_dataset_hadmid <- group_dataset_1 %>%
+  left_join(group_dataset_2, by = c("subject_id","hadm_id"))
+
+# Select subject_id from first hadm_id 
+final_dataset <- final_dataset_hadmid %>%
+  group_by(subject_id) %>%
+  arrange (icu_admittime) %>% 
+  filter(row_number() == 1) %>%
+  arrange(subject_id)
+
+```
+# Export file
+
+```{r}
+write.csv(final_dataset,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/final_dataset.csv', row.names = F)
+```
+

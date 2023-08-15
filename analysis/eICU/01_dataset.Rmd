@@ -87,13 +87,8 @@ Loading queries and extracting the data
 
 ```{r}
 # Criterion of prolonged mechanical ventilation: highest number of consecutive days of mechanical ventilation six or more hours per day
-vm_consecutive_days <- run_query(getSQL("sql/eICU/vm_consecutive_days.sql"))
+vm_consecutive_days <- run_query(getSQL("sql/vm_consecutive_days.sql"))
 
-# Criterion of prolonged mechanical ventilation: total consecutive or non-consecutive days of mechanical ventilation for six or more hours per day
-vm_total_days <- run_query(getSQL("sql/mimic-iv/vm_total_days.sql"))
-
-# Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
-vm_and_traq <- run_query(getSQL("sql/vm_and_traq.sql"))
 ```
 
 ## Traumatisms
@@ -162,7 +157,7 @@ trauma_contusion %<>%
 
 ```{r}
 #Patients
-patients <- run_query(getSQL("sql/patients.sql"))
+patient <- run_query(getSQL("sql/patient.sql"))
 
 #Admissions
 admissions <- run_query(getSQL("sql/admissions.sql"))

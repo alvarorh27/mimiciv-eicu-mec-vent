@@ -28,7 +28,7 @@ WITH sq1 AS (
     `physionet-data.eicu_crd.diagnosis`
 ) --end of sq1
 SELECT
-    patientunitstayid,
+    patientunitstayid AS stay_id,
     diagnosisoffset,
     icd9code,
     traumatic_general_min_diagnosisoffset,

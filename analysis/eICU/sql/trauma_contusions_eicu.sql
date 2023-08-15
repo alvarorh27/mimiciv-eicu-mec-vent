@@ -6,8 +6,8 @@ WITH sq1 AS (
     MIN(diagnosisoffset) OVER (PARTITION BY patientunitstayid) AS min_diagnosisoffset,
     CASE
       WHEN (icd9code LIKE 'S10____' OR icd9code LIKE 'S00____' OR icd9code LIKE 'S05____' OR icd9code LIKE 'S20____' OR icd9code LIKE 'S40____' OR icd9code LIKE 'S50____' OR icd9code LIKE 'S60____' OR icd9code LIKE 'S70____' OR icd9code LIKE 'S80____' OR icd9code LIKE 'S90____' OR icd9code BETWEEN '92%' AND '92499') AND (icd9code NOT LIKE '______D'AND icd9code NOT LIKE '______S')
-      THEN 'YES'
-      ELSE 'NO'
+      THEN 1
+      ELSE 0
     END AS contusion_min_diagnosisoffset,
     CASE
       WHEN (icd9code LIKE 'S10____' OR icd9code LIKE 'S00____' OR icd9code LIKE 'S05____' OR icd9code LIKE 'S20____' OR icd9code LIKE 'S40____' OR icd9code LIKE 'S50____' OR icd9code LIKE 'S60____' OR icd9code LIKE 'S70____' OR icd9code LIKE 'S80____' OR icd9code LIKE 'S90____' OR icd9code BETWEEN '92%' AND '92499') AND (icd9code NOT LIKE '______D'AND icd9code NOT LIKE '______S')
@@ -17,8 +17,8 @@ WITH sq1 AS (
                 GROUP BY patientunitstayid
                 HAVING COUNT(DISTINCT diagnosisoffset) > 1
            )
-      THEN 'YES'
-      ELSE 'NO'
+      THEN 1
+      ELSE 0
     END AS contusion_any_diagnosisoffset
   FROM
     `physionet-data.eicu_crd.diagnosis`
@@ -30,5 +30,5 @@ SELECT
     contusion_min_diagnosisoffset,
     contusion_any_diagnosisoffset  
 FROM sq1
-WHERE diagnosisoffset = min_diagnosisoffset AND (contusion_min_diagnosisoffset = 'YES'  OR contusion_any_diagnosisoffset = 'YES')
+WHERE diagnosisoffset = min_diagnosisoffset AND (contusion_min_diagnosisoffset = 1  OR contusion_any_diagnosisoffset = 1)
 ORDER BY patientunitstayid ASC;

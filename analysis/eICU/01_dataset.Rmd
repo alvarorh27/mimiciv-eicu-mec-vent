@@ -65,6 +65,20 @@ getSQL <- function(filepath) {
 }
 ```
 
+## Setting up connection
+
+```{r}
+bigrquery::bq_auth() # UNCOMMENT WHEN HAVEN TOCKEN ISSUES!!!
+# Establecer la conexión a BigQuery
+project_id <- readline(prompt = "Enter your project ID: ")
+
+con <- dbConnect(
+  bigrquery::bigquery(),
+  project = project_id
+)
+
+```
+
 # Data Load
 
 Loading queries and extracting the data
@@ -76,7 +90,7 @@ Loading queries and extracting the data
 vm_consecutive_days <- run_query(getSQL("sql/eICU/vm_consecutive_days.sql"))
 
 # Criterion of prolonged mechanical ventilation: total consecutive or non-consecutive days of mechanical ventilation for six or more hours per day
-vm_total_days <- run_query(getSQL("sql/vm_total_days.sql"))
+vm_total_days <- run_query(getSQL("sql/mimic-iv/vm_total_days.sql"))
 
 # Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
 vm_and_traq <- run_query(getSQL("sql/vm_and_traq.sql"))

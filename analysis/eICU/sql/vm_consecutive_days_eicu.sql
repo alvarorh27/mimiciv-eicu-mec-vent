@@ -483,7 +483,10 @@ from vd3),
       hadm_id,
       ranking) /*filtering by the longest episode. 42586 rows*/
   SELECT
-    *
+    stay_id, 
+    starttime, 
+    endtime, 
+    consecutive_vm_days
   FROM
     sq9
   WHERE

@@ -65,7 +65,7 @@ getSQL <- function(filepath) {
 }
 ```
 
-## Setting up connection with BigQuery
+# Setting up connection with BigQuery
 
 ```{r}
 bigrquery::bq_auth() # UNCOMMENT WHEN HAVEN TOCKEN ISSUES!!!
@@ -146,27 +146,23 @@ trauma_contusion <- run_query(getSQL("sql/trauma_contusions_eicu.sql"))
 #Patients
 patient <- run_query(getSQL("sql/patient_eicu.sql"))
 
-#Admissions
-admissions <- run_query(getSQL("sql/admissions.sql"))
-
 #Stays in ICU
-icustays <- run_query(getSQL("sql/icustays.sql"))
+icustays <- run_query(getSQL("sql/icustays_eicu.sql"))
 ```
 
 ## Severity scores
 
 ```{r}
-#Acute Physiology Score (APS)
-apsiii <- run_query(getSQL("sql/apsiii.sql"))
+#Table apachepatientresult 
+apachepatientresult <- run_query(getSQL("sql/apachepatientresult_eicu.sql"))
+apachepatientresult %<>%
+  group_by(patientunitstayid) %>%
+  arrange (apachepatientresultsid) %>%
+  filter(row_number() == 1)
 
-#Simplified Acute Physiology Score (SAPS)
-sapsii <- run_query(getSQL("sql/sapsii.sql"))
+#Table apachepredvar 
+apachepredvar <- run_query(getSQL("sql/apachepredvar_eicu.sql"))
 
-#Glasgow Coma Scale (GCS)
-first_day_gcs <- run_query(getSQL("sql/first_day_gcs.sql"))
-
-#Sequential Organ Failure Assessment (SOFA)
-first_day_sofa <- run_query(getSQL("sql/first_day_sofa.sql"))
 ```
 
 # Creation of Final Dataset
@@ -174,36 +170,27 @@ first_day_sofa <- run_query(getSQL("sql/first_day_sofa.sql"))
 ## Joining across datasets
 
 ```{r}
-# Join patients tables by subject_id
-dataset_join <- icustays %>%
-  left_join(patients, by = "subject_id")
+# Join patients tables by patientunitstayid
+dataset_join <- Reduce(function(...) merge(..., by = c("patientunitstayid"), all.x=TRUE, sort = TRUE), list(
+  icustays, 
+  patient, 
+  apachepatientresult, 
+  apachepredvar))
 
-# Join tables by subject_id and hadm_id  
-dataset_join <- Reduce(function(...) merge(..., by = c("subject_id", "hadm_id"), all.x=TRUE, sort = TRUE), list(
-  dataset_join, 
-  admissions, 
-  tbi,
-  trauma_general, 
-  trauma_fractures, 
-  trauma_luxations, 
-  trauma_sprains, 
-  trauma_burns, 
-  trauma_contusion))
-  
-# Join tables by subject_id, hadm_id and stay_id (except first_day_gcs as it doesn't include hadm_id)
-dataset_join <- Reduce(function(...) merge(..., by = c("subject_id","hadm_id", "stay_id"), all.x=TRUE, sort = TRUE), list(
-  dataset_join,
-  vm_consecutive_days, 
-  vm_total_days,
-  vm_and_traq,
-  apsiii,
-  sapsii,
-  first_day_sofa
-))
-
-#Join first_day_gcs table
+# Rename patientunitstayid to stay_id
 dataset_join %<>%
-  left_join(first_day_gcs, by = c("subject_id", "stay_id"))
+  rename("stay_id" = patientunitstayid)
+
+# Join tables by stay_id
+dataset_join <- Reduce(function(...) merge(..., by = c("stay_id"), all.x=TRUE, sort = TRUE), list(
+  dataset_join, 
+  vm_consecutive_days, 
+  trauma_burns, 
+  trauma_contusion, 
+  trauma_fractures, 
+  trauma_general, 
+  trauma_luxations, 
+  trauma_sprains))
 
 ```
 
@@ -216,44 +203,27 @@ names(dataset_join) <- tolower(names(dataset_join))
 # Rename columns for self-explanation purposes
 total_dataset <- dataset_join %>%
   rename(
-    "age" = anchor_age,
-    "hosp_admittime" = admittime, #date and time the patient was admitted to the hospital
-    "icu_admittime" = intime, #date and time the patient was transferred into the ICU
-    "icu_outtime" = outtime, #date and time the patient was transferred out of the ICU
-    "inhospital_death" = hospital_expire_flag, #patient death within the given hospitalization
-    "date_of_death" = dod, #date of death for the patient (out of hospital mortality is available for MIMIC-IV patients up to one year post-hospital discharge)
-  )
-
-# Convert character-type variables to factor 
+    "inhospital_death" = actualhospitalmortality, #patient death within the given hospitalization
+    "inicu_death" = actualicumortality, #patient death within the given ICU stay
+    "hospital_stay_days" = actualhospitallos, #hospital length of stay in days
+    "icu_stay_days" = actualiculos #ICU length of stay in days
+    )
+    
+# For the gender variable, convert 1 to "Female", 0 to "Male" and the rest to NA
 total_dataset %<>%
-  mutate("gender" = as.factor(gender))
+  mutate(gender = as.factor(case_when(gender == 1 ~ "Female", gender == 0 ~ "Male", TRUE ~ NA_character_ )))
 
-# Convert time/date variables in proper format 
+# Create variable days_of_death and death_30days
 total_dataset %<>%
-  mutate(
-    icu_outtime = as.POSIXct(as.character(icu_outtime), format = "%Y-%m-%d %H:%M:%S"),
-    date_of_death = as.Date(as.character(date_of_death), format = "%Y-%m-%d"),
-    inicu_death = as.integer(ifelse(difftime(as.Date(icu_outtime), date_of_death, units = "days") >= 0, 1, 0)))
-
-# Variables:
-## hospital_stay_days: length of stay for the given hospital stay
-## icu_stay_days: length of stay for the patient for the given ICU stay
-total_dataset %<>%
-  mutate(hospital_stay_days = round(as.numeric((difftime(dischtime, hosp_admittime, units = "hours"))/24), 2),
-         icu_stay_days = round(los, 2))
-
-# Variables death_30days (mortality at 30 days) and death_year (mortality at 1 year)
-total_dataset %<>%
-    mutate(
-    death_30days = as.integer(ifelse(difftime(date_of_death, hosp_admittime, units = "days") <= 30, 1, 0)),
-    death_year = as.integer(ifelse(difftime(date_of_death, hosp_admittime, units = "days") <= 365, 1, 0)
-    ))
+  mutate(days_of_death = ifelse(hospitaldischargelocation == "Death", hospital_stay_days, "Alive"), #if the patient is death, the hospital length of stay represents the days of death from UCI admission 
+         death_30days = ifelse(days_of_death <=30, 1, 0) #patient death before 30 days from ICU admission
+         )
 
 # Traumatism variables
 total_dataset %<>%
   mutate(
-    anytrauma_seq1 = as.integer(ifelse(tbi_seq1 == 1 | contusion_seq_1 == 1 | fractures_seq_1 == 1 | traumatic_general_seq_1 == 1 | luxation_seq_1 == 1 | sprain_seq_1 == 1, 1, 0)),          
-    anytrauma_anyseq = as.integer(ifelse(tbi_anyseq == 1 | contusion_any_seq == 1 | fractures_any_seq == 1 | traumatic_general_any_seq == 1 | luxation_any_seq == 1 | sprain_any_seq == 1, 1, 0)),
+    anytrauma_seq1 = as.integer(ifelse(fractures_min_diagnosisoffset == 1 | traumatic_general_min_diagnosisoffset == 1 | luxation_min_diagnosisoffset == 1, 1, 0)),          
+    anytrauma_anyseq = as.integer(ifelse(fractures_any_diagnosisoffset == 1 | traumatic_general_any_diagnosisoffset == 1 | luxation_any_diagnosisoffset == 1, 1, 0)),
             )
 
 # Variables mv_14days (prolonged mechanical ventilation, criterion of 14 days) and mv_96traq (prolonged mechanical ventilation, criterion of 96h of ventilation + traqueostomy)
@@ -262,20 +232,7 @@ total_dataset %<>%
     mv_consecutive_7days = as.integer(ifelse(consecutive_vm_days>=7, 1, 0)),
     mv_consecutive_14days = as.integer(ifelse(consecutive_vm_days>=14, 1, 0)),
     mv_consecutive_21days = as.integer(ifelse(consecutive_vm_days>=21, 1, 0)),
-    mv_total_7days = as.integer(ifelse(total_vm_days>=7, 1, 0)),
-    mv_total_14days = as.integer(ifelse(total_vm_days>=14, 1, 0)),
-    mv_total_21days = as.integer(ifelse(total_vm_days>=21, 1, 0)),
-    mv_96traq = as.integer(ifelse(!is.na(trach_time), 1, 0)),
-    prolonged_mec_vent = as.integer(ifelse((mv_consecutive_14days == 1 |
-                                             mv_96traq == 1), 1, 0
-    ))
-  )
-
-# Gravity scores variables
-total_dataset %<>%
-  mutate(
-    apsiii_prob = round(apsiii_prob*100, 2), 
-    sapsii_prob = round(sapsii_prob*100, 2)
+    prolonged_mec_vent = as.integer(ifelse(mv_consecutive_14days == 1, 1, 0))
   )
 
 ```

@@ -203,20 +203,34 @@ names(dataset_join) <- tolower(names(dataset_join))
 # Rename columns for self-explanation purposes
 total_dataset <- dataset_join %>%
   rename(
-    "inhospital_death" = actualhospitalmortality, #patient death within the given hospitalization
-    "inicu_death" = actualicumortality, #patient death within the given ICU stay
-    "hospital_stay_days" = actualhospitallos, #hospital length of stay in days
-    "icu_stay_days" = actualiculos #ICU length of stay in days
+    "subject_id" = uniquepid.x, #individual code for each patient
+    "hadm_id" = patienthealthsystemstayid.x, #individual code for each hospital admission
+    "hospital_stay_days" = unabridgedhosplos, #Hospital Length of stay from apachePatientResult table. 
+    "inhospital_death" = hosp_mort, #patient death within the given hospital stay from icustays table
+    "inicu_death" = unitdischargestatus, #patient death within the given ICU stay from patient table
+    "discharge_location" = hospitaldischargelocation, #location where the patient was discharged to from the hospital e.g.: Home, Nursing Home, Death, etc.
+    "apsiv" = acutephysiologyscore, #APS score (IV or IVa versions) from apachepatientresults table
+    "apache" = apachescore, #Apache Score. Calculated from acutePhysiologyScore
+    "gcs_verbal" = day1verbal, #from apachepredvar table
+    "gcs_motor" = day1motor, #from apachepredvar table
+    "gcs_eyes" = day1eyes #from apachepredvar table
     )
-    
-# For the gender variable, convert 1 to "Female", 0 to "Male" and the rest to NA
+
+#Transform variables
 total_dataset %<>%
-  mutate(gender = as.factor(case_when(gender == 1 ~ "Female", gender == 0 ~ "Male", TRUE ~ NA_character_ )))
+  mutate(gender.x = as.factor(case_when(gender.x == 1 ~ "Female", gender.x == 0 ~ "Male", TRUE ~ NA_character_)), #Convert 1 to "Female", 0 to "Male" and the rest to NA
+         icu_stay_days = round(icu_los_hours/24, 2), #Convert UCI hours to days
+         hospital_stay_days_mine = round((hospitaldischargeoffset.x - hospitaladmitoffset.x)/1440,2), 
+         discharge_location = ifelse(discharge_location == "", NA, discharge_location), #Convert blank values to NA
+         inicu_death = case_when(inicu_death == "Expired" ~ 1, inicu_death == "Alive" ~ 0, inicu_death == "" ~ NA), #Convert Expired to 1, Alive to 0 and null to NA
+         discharge_location = ifelse(is.na(discharge_location) & inicu_death == 1, "Death", discharge_location), #for NA values in discharge_location variable, fill with "Death" when the patient died in ICU
+         inhospital_death = ifelse(is.na(inhospital_death) & inicu_death == 1, 1, inhospital_death) #for NA values in inhospital_death variable, fill with 1 when the patient died in ICU, since if the patient died in ICU therefore he died in hospital as well
+          )
 
 # Create variable days_of_death and death_30days
 total_dataset %<>%
-  mutate(days_of_death = ifelse(hospitaldischargelocation == "Death", hospital_stay_days, "Alive"), #if the patient is death, the hospital length of stay represents the days of death from UCI admission 
-         death_30days = ifelse(days_of_death <=30, 1, 0) #patient death before 30 days from ICU admission
+  mutate(days_of_death = as.numeric(ifelse(discharge_location == "Death", hospital_stay_days_mine, -1)), #if the patient is dead, the hospital length of stay represents the days of death from hospital admission. If the patient is alive, a value of -1 is given  
+         death_30days = ifelse(days_of_death <=30 & days_of_death != -1, 1, 0) #patient death before 30 days from ICU admission
          )
 
 # Traumatism variables
@@ -240,12 +254,13 @@ total_dataset %<>%
 ## Selection of required columns
 
 ```{r}
-
 # Select the desired columns and order the result
-total_dataset %<>% 
-  select(subject_id, hadm_id, stay_id, age, gender, icu_admittime, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, gcs_min, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
-  arrange(subject_id, icu_admittime)
-
+total_dataset_selected <- total_dataset %>%
+  select(subject_id, hadm_id, stay_id, unitvisitnumber.x, age.x, gender.x, hospital_stay_days, hospital_stay_days_mine, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, prolonged_mec_vent, apsiv, apache, gcs_verbal, gcs_motor, gcs_eyes) %>%
+  rename("age" = age.x,
+         "gender" = gender.x,
+         "unitvisitnumber" = unitvisitnumber.x) %>% 
+  arrange(subject_id, unitvisitnumber)
 ```
 
 ## Addressing missingness
@@ -254,25 +269,30 @@ total_dataset %<>%
 # Map missingness in total_dataset before NA filling  
 ##Columns with na values
 print('Columns in total_dataset having NAs')
-names(total_dataset)[colSums(is.na(total_dataset)) > 0]
+names(total_dataset_selected)[colSums(is.na(total_dataset_selected)) > 0]
 
 print('Nº of columns with na values')
-n_var_miss(total_dataset)
+n_var_miss(total_dataset_selected)
 
 ##Plot columns and show descriptive table with NA values
-miss_summary_preclean <- miss_var_summary(total_dataset)
+miss_summary_preclean <- miss_var_summary(total_dataset_selected)
 miss_summary_preclean
-gg_miss_var(total_dataset, show_pct=TRUE)
+gg_miss_var(total_dataset_selected, show_pct=TRUE)
   
 ```
 ## NA filling
 ```{r}
 # Columns NA filling
-total_dataset_clean <- total_dataset %>%
+total_dataset_clean <- total_dataset_selected %>%
   mutate(
-##Column discharge_location is a non-dichotomous categorical variable. When having an NA and the patient died in-hospital, a "DIED" is filled. The other NAs are filled with the most frequent value (mode) using the mode.
-    discharge_location = ifelse(!is.na(discharge_location) & inhospital_death == 1, "DIED", discharge_location), 
-    discharge_location = ifelse(is.na(discharge_location), modeest::mfv(discharge_location), discharge_location),
+    gender = as.factor(fct_explicit_na(gender, na_level = "Unknown")), #NA values of gender are converted to "Unknown"
+    discharge_location = as.factor(ifelse(is.na(discharge_location), modeest::mfv(discharge_location), discharge_location)), # as a non-dichotomous categorical variable, NAs are filled with the most frequent value (mode) using the mode
+    across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), ~ifelse(is.na(.), 0, .)), #NA values from dichotomous variables are filled with 0
+    #apsiv and apache variables are omitted since they display a 26% of NA values
+  )
+
+
+,
 ## Discontinuous variables related with severity scores: 
 ### Glascow Coma Scale (GCS) 
 ### All rows in MIMIC-IV with gcs_unable=1 also have gcs_verbal=0 (15287 rows). There are also 95 rows with gcs_unable=0 with gcs_verbal=0 (95 rows). Since all sub gcs variables must display a minimal value equal to 1, this is corrected. 
@@ -286,14 +306,7 @@ total_dataset_clean <- total_dataset %>%
     tbi_anyseq = ifelse(is.na(tbi_anyseq), 0, tbi_anyseq),
 ### All 3 gcs variables are added together to obtain gcs_min, only when gcs_min is NA (530 rows, also with gcs_unable missing), whose gcs_min is filled completely based on mode; and patients with TBI and gcs_unable=1. Rows with gcs_unable=1 and not TBI has to maintain their 15 value. 
     gcs_min = as.integer(ifelse(is.na(gcs_min) | (tbi_anyseq==1 & gcs_unable==1), gcs_motor + gcs_verbal + gcs_eyes, gcs_min)),
-### SOFA: respiration, coagulation, liver, cardiovascular, cns and renal variables are filled with the median, and those 6 are added together to obtain SOFA
-    respiration = ifelse(is.na(respiration), median(respiration, na_rm=TRUE), respiration), 
-    coagulation = ifelse(is.na(coagulation), median(coagulation, na_rm=TRUE), coagulation), 
-    liver = ifelse(is.na(liver), median(liver, na_rm=TRUE), liver), 
-    cardiovascular = ifelse(is.na(cardiovascular), median(cardiovascular, na_rm=TRUE), cardiovascular), 
-    cns = ifelse(is.na(cns), median(cns, na_rm=TRUE), cns), 
-    renal = ifelse(is.na(renal), median(renal, na_rm=TRUE), renal), 
-    sofa = as.integer(respiration + coagulation + liver + cardiovascular + cns + renal)) %>%
+
 ##The rest of the NA-containing columns are filled with a '0' value. These include dichotomous variables (inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, mv_total_7days, mv_total_14days, mv_total_21days and prolonged_mec_vent), as well as discontinuous variables related with ventilation (consecutive_vm_days and total_vm_days)
   mutate_at(vars(10:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
 

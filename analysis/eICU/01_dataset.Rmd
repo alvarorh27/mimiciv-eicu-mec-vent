@@ -227,7 +227,7 @@ total_dataset <- dataset_join %>%
 total_dataset %<>%
   mutate(age.x = as.integer(ifelse(age.x == "> 89", 89, age.x)), #Convert >89 age values to 89
          age.x = ifelse(age.x == "", NA, age.x), #Convert blank values to NA
-         gender.x = as.factor(case_when(gender.x == 1 ~ "Female", gender.x == 0 ~ "Male", TRUE ~ NA_character_)), #Convert 1 to "Female", 0 to "Male" and the rest to NA
+         gender.x = case_when(gender.x == 1 ~ "Female", gender.x == 0 ~ "Male", TRUE ~ NA_character_), #Convert 1 to "Female", 0 to "Male" and the rest to NA
          icu_stay_days = round(icu_los_hours/24, 2), #Convert UCI hours to days
          hospital_stay_days_all = round((hospitaldischargeoffset.x - hospitaladmitoffset.x)/1440,2), 
          discharge_location = ifelse(discharge_location == "", NA, discharge_location), #Convert blank values to NA
@@ -296,6 +296,7 @@ total_dataset_clean <- total_dataset_selected %>%
   mutate(
     age = as.integer(ifelse(is.na(age), modeest::mfv(age, na_rm=TRUE), age)), # NAs are filled with the most frequent value (mode)
     gender = as.factor(fct_explicit_na(gender, na_level = "Unknown")), #NA values of gender are converted to "Unknown"
+    gender = relevel(gender, ref = "Male"), #change reference level of factor gender variable to "Male"
     discharge_location = as.factor(ifelse(is.na(discharge_location), modeest::mfv(discharge_location), discharge_location)), # as a non-dichotomous categorical variable, NAs are filled with the most frequent value (mode)
     across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), ~ifelse(is.na(.), 0, .)), #NA values from dichotomous variables are filled with 0
     across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), as.integer),

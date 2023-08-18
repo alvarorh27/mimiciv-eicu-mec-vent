@@ -298,10 +298,11 @@ total_dataset_clean <- total_dataset_selected %>%
     gender = as.factor(fct_explicit_na(gender, na_level = "Unknown")), #NA values of gender are converted to "Unknown"
     discharge_location = as.factor(ifelse(is.na(discharge_location), modeest::mfv(discharge_location), discharge_location)), # as a non-dichotomous categorical variable, NAs are filled with the most frequent value (mode)
     across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), ~ifelse(is.na(.), 0, .)), #NA values from dichotomous variables are filled with 0
+    across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), as.integer),
     #apsiv and apache variables are omitted since they display a 26% of NA values
     across(gcs_verbal:gcs_eyes, ~ifelse(. == -1, 1, .)), #convert values equal to -1 to 1, the minimal value for each gcs variable. This could be due in eICU database to various reasons, such as the patient being intubated, sedated, paralyzed or with an eye injury that prevents evaluating their response. In these cases, a value of -1 is assigned to indicate that the data is missing or not applicable.
     across(gcs_verbal:gcs_eyes, ~ifelse(is.na(.), modeest::mfv(., na_rm=TRUE), .)), #fill NA values with the mode
-    gcs_min = gcs_verbal + gcs_motor + gcs_eyes #total gcs value is the sum of verbal, motor and eyes (minimum: 3, maximum: 15)
+    gcs_min = as.integer(gcs_verbal + gcs_motor + gcs_eyes) #total gcs value is the sum of verbal, motor and eyes (minimum: 3, maximum: 15)
   )
 
 total_dataset_clean_selected <- total_dataset_clean %>%
@@ -362,20 +363,19 @@ total_dataset_clean_selected %<>%
 # Group all stay_id within joint hospital admissions
 
 #Summarizing variables into hadm_id groups
-group_dataset_1 <- total_dataset_clean %>%
+final_dataset_hadmid <- total_dataset_clean_selected %>%
   group_by(subject_id, hadm_id) %>%
-  arrange (icu_admittime) %>% 
+  arrange (unitvisitnumber) %>% 
   summarize(
     age=min(age), 
     gender=first(gender), 
-    icu_admittime=min(icu_admittime), 
-    hospital_stay_days=first(hospital_stay_days),
+    unitvisitnumber=n(), 
+    hospital_stay_days_all=first(hospital_stay_days_all),
     icu_stay_days=sum(icu_stay_days), 
     discharge_location=last(discharge_location),
     inhospital_death=max(inhospital_death), 
     inicu_death=max(inicu_death), 
     death_30days=max(death_30days), 
-    death_year=max(death_year), 
     tbi_seq1=first(tbi_seq1), 
     tbi_anyseq=first(tbi_anyseq), 
     anytrauma_seq1=first(anytrauma_seq1),
@@ -390,38 +390,15 @@ group_dataset_1 <- total_dataset_clean %>%
     mv_consecutive_7days=max(mv_consecutive_7days), 
     mv_consecutive_14days=max(mv_consecutive_14days),
     mv_consecutive_21days=max(mv_consecutive_21days),
-    total_vm_days=sum(total_vm_days), 
-    mv_total_7days = ifelse(total_vm_days>=7, 1, 0),
-    mv_total_14days = ifelse(total_vm_days>=14, 1, 0),
-    mv_total_21days = ifelse(total_vm_days>=21, 1, 0),
-    mv_96traq=max(mv_96traq), 
     prolonged_mec_vent=max(prolonged_mec_vent), 
+    gcs_min = min(gcs_min)
           ) %>%
     arrange(subject_id)
-
-#Select severity scores related to first stay_id. It must be noted that stay_id in MIMIC-IV are not necessarily ordered numerically, so we order by ICU admission time.  
-group_dataset_2 <- total_dataset_clean %>%
-  group_by(subject_id, hadm_id) %>%
-  arrange (icu_admittime) %>% 
-  filter(row_number()==1) %>%
-  select(apsiii:renal) %>%
-  arrange(subject_id)
-
-#Merging two grouped datasets
-final_dataset_hadmid <- group_dataset_1 %>%
-  left_join(group_dataset_2, by = c("subject_id","hadm_id"))
-
-# Select subject_id from first hadm_id 
-final_dataset <- final_dataset_hadmid %>%
-  group_by(subject_id) %>%
-  arrange (icu_admittime) %>% 
-  filter(row_number() == 1) %>%
-  arrange(subject_id)
 
 ```
 # Export file
 
 ```{r}
-write.csv(final_dataset,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset.csv', row.names = F)
+write.csv(final_dataset_hadmid,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset.csv', row.names = F)
 ```
 

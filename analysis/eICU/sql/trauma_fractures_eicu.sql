@@ -23,4 +23,5 @@ SELECT
     fractures_min_diagnosisoffset,
     fractures_any_diagnosisoffset
 FROM sq1
+WHERE fractures_min_diagnosisoffset = 1 OR fractures_any_diagnosisoffset = 1
 ORDER BY patientunitstayid ASC;

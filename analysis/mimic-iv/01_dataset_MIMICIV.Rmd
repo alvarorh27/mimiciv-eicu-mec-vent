@@ -65,6 +65,20 @@ getSQL <- function(filepath) {
 }
 ```
 
+# Setting up connection with BigQuery
+
+```{r}
+bigrquery::bq_auth() # UNCOMMENT WHEN HAVEN TOCKEN ISSUES!!!
+# Establecer la conexión a BigQuery
+project_id <- readline(prompt = "Enter your project ID: ")
+
+con <- dbConnect(
+  bigrquery::bigquery(),
+  project = project_id
+)
+
+```
+
 # Data Load
 
 Loading queries and extracting the data
@@ -73,70 +87,69 @@ Loading queries and extracting the data
 
 ```{r}
 # Criterion of prolonged mechanical ventilation: highest number of consecutive days of mechanical ventilation six or more hours per day
-vm_consecutive_days <- run_query(getSQL("sql/vm_consecutive_days.sql"))
+vm_consecutive_days_MIMICIV <- run_query(getSQL("sql/vm_consecutive_days_MIMIC-IV.sql"))
 
 # Criterion of prolonged mechanical ventilation: total consecutive or non-consecutive days of mechanical ventilation for six or more hours per day
-vm_total_days <- run_query(getSQL("sql/vm_total_days.sql"))
+vm_total_days_MIMICIV <- run_query(getSQL("sql/vm_total_days_MIMIC-IV.sql"))
 
 # Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
-vm_and_traq <- run_query(getSQL("sql/vm_and_traq.sql"))
+vm_and_traq_MIMICIV <- run_query(getSQL("sql/vm_and_traq_MIMIC-IV.sql"))
 ```
 
 ## Traumatisms
 
 ```{r}
 #Traumatic Brain Injury
-tbi <- run_query(getSQL("sql/tbi.sql"))
-tbi %<>%
+tbi_MIMICIV <- run_query(getSQL("sql/tbi_MIMIC-IV.sql"))
+tbi_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
   summarize(
     tbi_seq1=max(tbi_seq_1), 
     tbi_anyseq=max(tbi_any_seq))
 
-# Data cleaning to group by hadm_id
 #General traumatisms
-trauma_general <- run_query(getSQL("sql/trauma_general.sql"))
-trauma_general %<>%
+trauma_general_MIMICIV <- run_query(getSQL("sql/trauma_general_MIMIC-IV.sql"))
+trauma_general_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
   summarize(
     traumatic_general_seq_1=max(traumatic_general_seq_1), 
     traumatic_general_any_seq=max(traumatic_general_any_seq))
 
 #Fractures
-trauma_fractures <- run_query(getSQL("sql/trauma_fractures.sql"))
-trauma_fractures %<>%
+trauma_fractures_MIMICIV <- run_query(getSQL("sql/trauma_fractures_MIMIC-IV.sql"))
+trauma_fractures_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
   summarize(
     fractures_seq_1=max(fractures_seq_1),
     fractures_any_seq=max(fractures_any_seq))
 
 #Luxations
-trauma_luxations <- run_query(getSQL("sql/trauma_luxations.sql"))
-trauma_luxations %<>%
+trauma_luxations_MIMICIV <- run_query(getSQL("sql/trauma_luxations_MIMIC-IV.sql"))
+trauma_luxations_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
   summarize(
     luxation_seq_1=max(luxation_seq_1),
     luxation_any_seq=max(luxation_any_seq))
 
 #Sprains
-trauma_sprains <- run_query(getSQL("sql/trauma_sprains.sql"))
-trauma_sprains %<>%
+trauma_sprains_MIMICIV <- run_query(getSQL("sql/trauma_sprains_MIMIC-IV.sql"))
+trauma_sprains_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
   summarize(
-    sprains_seq_1=max(sprains_seq_1),
-    sprains_any_seq=max(sprains_any_seq))
+    sprain_seq_1=max(sprain_seq_1),
+    sprain_any_seq=max(sprain_any_seq))
 
 #Burns
-trauma_burns <- run_query(getSQL("sql/trauma_burns.sql"))
-trauma_burns %<>%
+trauma_burns_MIMICIV <- run_query(getSQL("sql/trauma_burns_MIMIC-IV.sql"))
+trauma_burns_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
   summarize(
     burns_seq_1=max(burns_seq_1),
     burns_any_seq=max(burns_any_seq))
 
 #Contusion
-trauma_contusion <- run_query(getSQL("sql/trauma_contusions.sql"))
-trauma_contusion %<>%
+trauma_contusion_MIMICIV <- run_query(getSQL("sql/trauma_contusions_MIMIC-IV.sql"))
+trauma_contusion_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
   summarize(
     contusion_seq_1=max(contusion_seq_1),
@@ -148,29 +161,33 @@ trauma_contusion %<>%
 
 ```{r}
 #Patients
-patients <- run_query(getSQL("sql/patients.sql"))
+patients_MIMICIV <- run_query(getSQL("sql/patients_MIMIC-IV.sql"))
 
 #Admissions
-admissions <- run_query(getSQL("sql/admissions.sql"))
+admissions_MIMICIV <- run_query(getSQL("sql/admissions_MIMIC-IV.sql"))
 
 #Stays in ICU
-icustays <- run_query(getSQL("sql/icustays.sql"))
+icustays_MIMICIV <- run_query(getSQL("sql/icustays_MIMIC-IV.sql"))
 ```
 
 ## Severity scores
 
 ```{r}
 #Acute Physiology Score (APS)
-apsiii <- run_query(getSQL("sql/apsiii.sql"))
+apsiii_MIMICIV <- run_query(getSQL("sql/apsiii_MIMIC-IV.sql"))
 
 #Simplified Acute Physiology Score (SAPS)
-sapsii <- run_query(getSQL("sql/sapsii.sql"))
+sapsii_MIMICIV <- run_query(getSQL("sql/sapsii_MIMIC-IV.sql"))
 
 #Glasgow Coma Scale (GCS)
-first_day_gcs <- run_query(getSQL("sql/first_day_gcs.sql"))
+first_day_gcs_MIMICIV <- run_query(getSQL("sql/first_day_gcs_MIMIC-IV.sql"))
 
 #Sequential Organ Failure Assessment (SOFA)
-first_day_sofa <- run_query(getSQL("sql/first_day_sofa.sql"))
+first_day_sofa_MIMICIV <- run_query(getSQL("sql/first_day_sofa_MIMIC-IV.sql"))
+
+# comorbidities
+charlson_MIMICIV <- run_query(getSQL('sql/charlson_MIMIC-IV.sql'))
+
 ```
 
 # Creation of Final Dataset
@@ -179,35 +196,36 @@ first_day_sofa <- run_query(getSQL("sql/first_day_sofa.sql"))
 
 ```{r}
 # Join patients tables by subject_id
-dataset_join <- icustays %>%
-  left_join(patients, by = "subject_id")
+dataset_join <- icustays_MIMICIV %>%
+  left_join(patients_MIMICIV, by = "subject_id")
 
 # Join tables by subject_id and hadm_id  
 dataset_join <- Reduce(function(...) merge(..., by = c("subject_id", "hadm_id"), all.x=TRUE, sort = TRUE), list(
   dataset_join, 
-  admissions, 
-  tbi,
-  trauma_general, 
-  trauma_fractures, 
-  trauma_luxations, 
-  trauma_sprains, 
-  trauma_burns, 
-  trauma_contusion))
+  admissions_MIMICIV, 
+  tbi_MIMICIV,
+  trauma_general_MIMICIV, 
+  trauma_fractures_MIMICIV, 
+  trauma_luxations_MIMICIV, 
+  trauma_sprains_MIMICIV, 
+  trauma_burns_MIMICIV, 
+  trauma_contusion_MIMICIV, 
+  charlson_MIMICIV))
   
 # Join tables by subject_id, hadm_id and stay_id (except first_day_gcs as it doesn't include hadm_id)
 dataset_join <- Reduce(function(...) merge(..., by = c("subject_id","hadm_id", "stay_id"), all.x=TRUE, sort = TRUE), list(
   dataset_join,
-  vm_consecutive_days, 
-  vm_total_days,
-  vm_and_traq,
-  apsiii,
-  sapsii,
-  first_day_sofa
+  vm_consecutive_days_MIMICIV, 
+  vm_total_days_MIMICIV,
+  vm_and_traq_MIMICIV,
+  apsiii_MIMICIV,
+  sapsii_MIMICIV,
+  first_day_sofa_MIMICIV
 ))
 
 #Join first_day_gcs table
 dataset_join %<>%
-  left_join(first_day_gcs, by = c("subject_id", "stay_id"))
+  left_join(first_day_gcs_MIMICIV, by = c("subject_id", "stay_id"))
 
 ```
 
@@ -226,15 +244,14 @@ total_dataset <- dataset_join %>%
     "icu_outtime" = outtime, #date and time the patient was transferred out of the ICU
     "inhospital_death" = hospital_expire_flag, #patient death within the given hospitalization
     "date_of_death" = dod, #date of death for the patient (out of hospital mortality is available for MIMIC-IV patients up to one year post-hospital discharge)
+    "gcs" = gcs_min, 
+    "charlson" = charlson_comorbidity_index #Charlson Comorbidity Index (CCI)
   )
-
-# Convert character-type variables to factor 
-total_dataset %<>%
-  mutate("gender" = as.factor(gender))
 
 # Convert time/date variables in proper format 
 total_dataset %<>%
   mutate(
+    icu_admittime = as.POSIXct(as.character(icu_admittime), format = "%Y-%m-%d %H:%M:%S"),
     icu_outtime = as.POSIXct(as.character(icu_outtime), format = "%Y-%m-%d %H:%M:%S"),
     date_of_death = as.Date(as.character(date_of_death), format = "%Y-%m-%d"),
     inicu_death = as.integer(ifelse(difftime(as.Date(icu_outtime), date_of_death, units = "days") >= 0, 1, 0)))
@@ -278,6 +295,7 @@ total_dataset %<>%
 # Gravity scores variables
 total_dataset %<>%
   mutate(
+    gcs_original = gcs, #new gcs variable to provide original gcs values without imputation
     apsiii_prob = round(apsiii_prob*100, 2), 
     sapsii_prob = round(sapsii_prob*100, 2)
   )
@@ -290,7 +308,7 @@ total_dataset %<>%
 
 # Select the desired columns and order the result
 total_dataset %<>% 
-  select(subject_id, hadm_id, stay_id, age, gender, icu_admittime, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, gcs_min, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
+  select(subject_id, hadm_id, stay_id, age, gender, icu_admittime, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, charlson, gcs_original, gcs, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
   arrange(subject_id, icu_admittime)
 
 ```
@@ -312,6 +330,7 @@ miss_summary_preclean
 gg_miss_var(total_dataset, show_pct=TRUE)
   
 ```
+
 ## NA filling
 ```{r}
 # Columns NA filling
@@ -331,8 +350,8 @@ total_dataset_clean <- total_dataset %>%
 # Fill the NA in tbi_seq1 and tbi_anyseq to avoid errors in next lines
     tbi_seq1 = ifelse(is.na(tbi_seq1), 0, tbi_seq1),
     tbi_anyseq = ifelse(is.na(tbi_anyseq), 0, tbi_anyseq),
-### All 3 gcs variables are added together to obtain gcs_min, only when gcs_min is NA (530 rows, also with gcs_unable missing), whose gcs_min is filled completely based on mode; and patients with TBI and gcs_unable=1. Rows with gcs_unable=1 and not TBI has to maintain their 15 value. 
-    gcs_min = as.integer(ifelse(is.na(gcs_min) | (tbi_anyseq==1 & gcs_unable==1), gcs_motor + gcs_verbal + gcs_eyes, gcs_min)),
+### All 3 gcs variables are added together to obtain gcs, only when gcs is NA (530 rows, also with gcs_unable missing), whose gcs is filled completely based on mode; and patients with TBI and gcs_unable=1. Rows with gcs_unable=1 and not TBI has to maintain their 15 value. 
+    gcs = as.integer(ifelse(is.na(gcs) | (tbi_anyseq==1 & gcs_unable==1), gcs_motor + gcs_verbal + gcs_eyes, gcs)),
 ### SOFA: respiration, coagulation, liver, cardiovascular, cns and renal variables are filled with the median, and those 6 are added together to obtain SOFA
     respiration = ifelse(is.na(respiration), median(respiration, na_rm=TRUE), respiration), 
     coagulation = ifelse(is.na(coagulation), median(coagulation, na_rm=TRUE), coagulation), 
@@ -362,14 +381,15 @@ miss_summary_postclean
 gg_miss_var(total_dataset_clean, show_pct=TRUE)
   
 ```
+
 ## Creation of additional variables
 ```{r}
 # Create variable tbi severe and non-severe tbi, as well as trauma_type, containing 4 types of trauma in our dataset: TBI, general traumatism without TBI, severe TBI, non-severe TBI, for both seq1 and anyseq 
 total_dataset_clean %<>%
   mutate(
-    tbi_severe_seq1 = ifelse(tbi_seq1 == 1 & gcs_min <= 8, 1, 0),
+    tbi_severe_seq1 = ifelse(tbi_seq1 == 1 & gcs <= 8, 1, 0),
     tbi_nonsevere_seq1 = ifelse(tbi_seq1 == 1 &
-                                  gcs_min > 8, 1, 0),
+                                  gcs > 8, 1, 0),
     trauma_type_seq1 = as.factor(
       ifelse(anytrauma_seq1 == 0, "non_trauma",
              ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "trauma_non_tbi",
@@ -377,9 +397,9 @@ total_dataset_clean %<>%
                            ifelse(tbi_nonsevere_seq1 == 1, "tbi_non_severe", NA)))
       )
     ),
-    tbi_severe_anyseq = ifelse(tbi_anyseq == 1 & gcs_min <= 8, 1, 0),
+    tbi_severe_anyseq = ifelse(tbi_anyseq == 1 & gcs <= 8, 1, 0),
     tbi_nonsevere_anyseq = ifelse(tbi_anyseq == 1 &
-                                  gcs_min > 8, 1, 0),
+                                  gcs > 8, 1, 0),
     trauma_type_anyseq = as.factor(
       ifelse(anytrauma_anyseq == 0, "non_trauma",
              ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "trauma_non_tbi",
@@ -388,6 +408,15 @@ total_dataset_clean %<>%
       )
     )
   )
+
+# Convert categorical variables to factor
+total_dataset_clean %<>%
+  mutate(gender = as.factor(gender), 
+         discharge_location = as.factor(discharge_location), 
+         trauma_type_seq1 = as.factor(trauma_type_seq1), 
+         trauma_type_seq1 = relevel(trauma_type_seq1, ref = "non_trauma"),
+         trauma_type_anyseq = as.factor(trauma_type_anyseq), 
+         trauma_type_anyseq = relevel(trauma_type_anyseq, ref = "non_trauma"))
 
 # Select and order columns
 total_dataset_clean %<>% 
@@ -451,16 +480,16 @@ final_dataset_hadmid <- group_dataset_1 %>%
   left_join(group_dataset_2, by = c("subject_id","hadm_id"))
 
 # Select subject_id from first hadm_id 
-final_dataset <- final_dataset_hadmid %>%
+final_dataset_MIMICIV <- final_dataset_hadmid %>%
   group_by(subject_id) %>%
   arrange (icu_admittime) %>% 
   filter(row_number() == 1) %>%
   arrange(subject_id)
 
 ```
-# Export file
 
+# Export file
 ```{r}
-write.csv(final_dataset,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/final_dataset.csv', row.names = F)
+write.csv(final_dataset_MIMICIV,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv', row.names = F)
 ```
 

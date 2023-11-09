@@ -90,8 +90,10 @@ Loading queries and extracting the data
 vm_consecutive_days <- run_query(getSQL("sql/vm_consecutive_days_eicu.sql"))
 
 # Criterion of prolonged mechanical ventilation: total consecutive or non-consecutive days of mechanical ventilation for six or more hours per day
+vm_total_days <- run_query(getSQL("sql/vm_total_days_eicu.sql"))
 
 # Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
+vm_and_traq <- run_query(getSQL("sql/vm_and_traq_eicu.sql"))
 
 ```
 
@@ -103,8 +105,8 @@ tbi <- run_query(getSQL("sql/tbi_eicu.sql"))
 tbi %<>%
   group_by(stay_id) %>%
   summarize(
-    tbi_seq1=max(tbi_seq1), 
-    tbi_anyseq=max(tbi_anyseq))
+    tbi_seq1=max(tbi_min_diagnosisoffset), 
+    tbi_anyseq=max(tbi_any_diagnosisoffset))
 
 #General traumatisms
 trauma_general <- run_query(getSQL("sql/trauma_general_eicu.sql"))
@@ -191,6 +193,8 @@ dataset_join %<>%
 dataset_join <- Reduce(function(...) merge(..., by = c("stay_id"), all.x=TRUE, sort = TRUE), list(
   dataset_join, 
   vm_consecutive_days, 
+  vm_total_days,
+  vm_and_traq, 
   trauma_burns, 
   tbi,
   trauma_contusion, 
@@ -210,8 +214,8 @@ names(dataset_join) <- tolower(names(dataset_join))
 # Rename columns for self-explanation purposes
 total_dataset <- dataset_join %>%
   rename(
-    "subject_id" = uniquepid.x, #individual code for each patient
-    "hadm_id" = patienthealthsystemstayid.x, #individual code for each hospital admission
+    "subject_id_first" = uniquepid.x, #individual code for each patient
+    "hadm_id_first" = patienthealthsystemstayid.x, #individual code for each hospital admission
     "hospital_stay_days" = unabridgedhosplos, #Hospital Length of stay from apachePatientResult table. 
     "inhospital_death" = hosp_mort, #patient death within the given hospital stay from icustays table
     "inicu_death" = unitdischargestatus, #patient death within the given ICU stay from patient table
@@ -255,8 +259,13 @@ total_dataset %<>%
     mv_consecutive_7days = as.integer(ifelse(consecutive_vm_days>=7, 1, 0)),
     mv_consecutive_14days = as.integer(ifelse(consecutive_vm_days>=14, 1, 0)),
     mv_consecutive_21days = as.integer(ifelse(consecutive_vm_days>=21, 1, 0)),
-    prolonged_mec_vent = as.integer(ifelse(mv_consecutive_14days == 1, 1, 0))
-  )
+    mv_total_7days = as.integer(ifelse(total_vm_days>=7, 1, 0)),
+    mv_total_14days = as.integer(ifelse(total_vm_days>=14, 1, 0)),
+    mv_total_21days = as.integer(ifelse(total_vm_days>=21, 1, 0)),
+    mv_96traq = as.integer(ifelse(!is.na(event), 1, 0)),
+    prolonged_mec_vent = as.integer(ifelse((mv_consecutive_14days == 1 |
+                                             mv_96traq == 1), 1, 0))
+      )
 
 ```
 
@@ -265,8 +274,10 @@ total_dataset %<>%
 ```{r}
 # Select the desired columns and order the result
 total_dataset_selected <- total_dataset %>%
-  select(subject_id, hadm_id, stay_id, unitvisitnumber.x, age.x, gender.x, hospital_stay_days, hospital_stay_days_all, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, prolonged_mec_vent, apsiv, apache, gcs_verbal, gcs_motor, gcs_eyes) %>%
-  rename("age" = age.x,
+  select(subject_id_first, hadm_id_first, stay_id, unitvisitnumber.x, age.x, gender.x, hospital_stay_days, hospital_stay_days_all, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiv, apache, gcs_verbal, gcs_motor, gcs_eyes) %>%
+  rename("subject_id" = subject_id_first, 
+         "hadm_id" = hadm_id_first, 
+         "age" = age.x,
          "gender" = gender.x,
          "unitvisitnumber" = unitvisitnumber.x) %>% 
   arrange(subject_id, unitvisitnumber)
@@ -391,6 +402,11 @@ final_dataset_hadmid <- total_dataset_clean_selected %>%
     mv_consecutive_7days=max(mv_consecutive_7days), 
     mv_consecutive_14days=max(mv_consecutive_14days),
     mv_consecutive_21days=max(mv_consecutive_21days),
+    total_vm_days=sum(total_vm_days), 
+    mv_total_7days = ifelse(total_vm_days>=7, 1, 0),
+    mv_total_14days = ifelse(total_vm_days>=14, 1, 0),
+    mv_total_21days = ifelse(total_vm_days>=21, 1, 0),
+    mv_96traq=max(mv_96traq),
     prolonged_mec_vent=max(prolonged_mec_vent), 
     gcs_min = min(gcs_min)
           ) %>%

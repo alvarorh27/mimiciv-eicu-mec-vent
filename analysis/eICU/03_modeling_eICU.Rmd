@@ -267,7 +267,7 @@ ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/forestplot
 # Fit a logistic regression model with interaction term
 logreg_interactive_death30days_2 <-
   glm(
-    death_30days ~ prolonged_mec_vent * trauma_type_anyseq + age + gender + consecutive_vm_days + gcs_min,
+    death_30days ~ prolonged_mec_vent + trauma_type_anyseq + prolonged_mec_vent * trauma_type_anyseq + age + gender + consecutive_vm_days + gcs_min,
     data = final_dataset,
     family = binomial
   )

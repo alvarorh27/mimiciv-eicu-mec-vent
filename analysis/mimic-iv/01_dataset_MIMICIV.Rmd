@@ -33,7 +33,7 @@ library(naniar)
 library(modeest)
 ```
 
-# BigQuery related functions
+## BigQuery related functions
 
 This chunks creates the run_query and getSQL function.
 
@@ -65,7 +65,7 @@ getSQL <- function(filepath) {
 }
 ```
 
-# Setting up connection with BigQuery
+## Setting up connection with BigQuery
 
 ```{r}
 bigrquery::bq_auth() # UNCOMMENT WHEN HAVEN TOCKEN ISSUES!!!
@@ -239,6 +239,7 @@ names(dataset_join) <- tolower(names(dataset_join))
 total_dataset <- dataset_join %>%
   rename(
     "age" = anchor_age,
+    "sex" = gender, 
     "hosp_admittime" = admittime, #date and time the patient was admitted to the hospital
     "icu_admittime" = intime, #date and time the patient was transferred into the ICU
     "icu_outtime" = outtime, #date and time the patient was transferred out of the ICU
@@ -305,10 +306,9 @@ total_dataset %<>%
 ## Selection of required columns
 
 ```{r}
-
 # Select the desired columns and order the result
 total_dataset %<>% 
-  select(subject_id, hadm_id, stay_id, age, gender, icu_admittime, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, charlson, gcs_original, gcs, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
+  select(subject_id, hadm_id, stay_id, age, sex, icu_admittime, hospital_stay_days, icu_stay_days, discharge_location, date_of_death, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, charlson, gcs_original, gcs, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
   arrange(subject_id, icu_admittime)
 
 ```
@@ -361,7 +361,7 @@ total_dataset_clean <- total_dataset %>%
     renal = ifelse(is.na(renal), median(renal, na_rm=TRUE), renal), 
     sofa = as.integer(respiration + coagulation + liver + cardiovascular + cns + renal)) %>%
 ##The rest of the NA-containing columns are filled with a '0' value. These include dichotomous variables (inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, mv_total_7days, mv_total_14days, mv_total_21days and prolonged_mec_vent), as well as discontinuous variables related with ventilation (consecutive_vm_days and total_vm_days)
-  mutate_at(vars(10:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
+  mutate_at(vars(inhospital_death:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
 
 ```
 
@@ -411,7 +411,7 @@ total_dataset_clean %<>%
 
 # Convert categorical variables to factor
 total_dataset_clean %<>%
-  mutate(gender = as.factor(gender), 
+  mutate(sex = as.factor(sex), 
          discharge_location = as.factor(discharge_location), 
          trauma_type_seq1 = as.factor(trauma_type_seq1), 
          trauma_type_seq1 = relevel(trauma_type_seq1, ref = "non_trauma"),
@@ -435,13 +435,14 @@ group_dataset_1 <- total_dataset_clean %>%
   arrange (icu_admittime) %>% 
   summarize(
     age=min(age), 
-    gender=first(gender), 
+    sex=first(sex), 
     icu_admittime=min(icu_admittime), 
     hospital_stay_days=first(hospital_stay_days),
     icu_stay_days=sum(icu_stay_days), 
     discharge_location=last(discharge_location),
     inhospital_death=max(inhospital_death), 
     inicu_death=max(inicu_death), 
+    date_of_death=as.Date(max(date_of_death)), 
     death_30days=max(death_30days), 
     death_year=max(death_year), 
     tbi_seq1=first(tbi_seq1), 
@@ -486,10 +487,37 @@ final_dataset_MIMICIV <- final_dataset_hadmid %>%
   filter(row_number() == 1) %>%
   arrange(subject_id)
 
+#Print flowchart grouping criteria
+cat(sprintf('%d unique patients in ICU in original MIMIC-IV database.\n', nrow(total_dataset_clean)))
+
+rows_excluded_hadmid <- nrow(total_dataset_clean)-nrow(group_dataset_1)
+cat(sprintf('\n%d patients with unique hospital id, excluding %d rows.\n', nrow(group_dataset_1), rows_excluded_hadmid))
+
+rows_excluded_subject_id <- nrow(final_dataset_hadmid)-nrow(final_dataset_MIMICIV)
+cat(sprintf('%d selected first ICU stay for each individual, excluding %d rows.\n', nrow(final_dataset_MIMICIV), rows_excluded_subject_id))
+
+```
+
+## Exclusion criteria
+```{r}
+# Apply exclusion filters and print rows excluded
+
+
 ```
 
 # Export file
 ```{r}
 write.csv(final_dataset_MIMICIV,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv', row.names = F)
+```
+
+# Load File
+
+```{r}
+# Load file
+final_dataset_MIMICIV <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv')
+
+# Print final dataset and data frame summary
+View(final_dataset_MIMICIV)
+stview(dfSummary(final_dataset_MIMICIV))
 ```
 

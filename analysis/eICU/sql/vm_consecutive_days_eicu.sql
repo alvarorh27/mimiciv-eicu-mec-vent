@@ -279,11 +279,11 @@ WITH respchart AS (
       , activeUponDischarge
       , supp_oxygen
 
-      -- If the time since the last oxygen therapy event is more than 24 hours,
+      -- If the time since the last oxygen therapy event is more than 14 hours,
 	-- we consider that ventilation had ended in between.
 	-- That is, the next ventilation record corresponds to a new ventilation session.
       , CASE
-		WHEN charttime - charttime_lag > 24*60 THEN 1
+		WHEN charttime - charttime_lag > 14*60 THEN 1
 		WHEN charttime_lag IS NULL THEN 1 -- No lag can be computed for the very first record
 		ELSE 0
 	END AS newvent

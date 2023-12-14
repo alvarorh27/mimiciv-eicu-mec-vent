@@ -33,7 +33,7 @@ library(naniar)
 library(modeest)
 ```
 
-# BigQuery related functions
+## BigQuery related functions
 
 This chunks creates the run_query and getSQL function.
 
@@ -65,7 +65,7 @@ getSQL <- function(filepath) {
 }
 ```
 
-# Setting up connection with BigQuery
+## Setting up connection with BigQuery
 
 ```{r}
 bigrquery::bq_auth() # UNCOMMENT WHEN HAVEN TOCKEN ISSUES!!!
@@ -87,13 +87,13 @@ Loading queries and extracting the data
 
 ```{r}
 # Criterion of prolonged mechanical ventilation: highest number of consecutive days of mechanical ventilation six or more hours per day
-vm_consecutive_days <- run_query(getSQL("sql/vm_consecutive_days_eicu.sql"))
+vm_consecutive_days_eicu <- run_query(getSQL("sql/vm_consecutive_days_eicu.sql"))
 
 # Criterion of prolonged mechanical ventilation: total consecutive or non-consecutive days of mechanical ventilation for six or more hours per day
-vm_total_days <- run_query(getSQL("sql/vm_total_days_eicu.sql"))
+vm_total_days_eicu <- run_query(getSQL("sql/vm_total_days_eicu.sql"))
 
 # Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
-vm_and_traq <- run_query(getSQL("sql/vm_and_traq_eicu.sql"))
+vm_and_traq_eicu <- run_query(getSQL("sql/vm_and_traq_eicu.sql"))
 
 ```
 
@@ -101,50 +101,50 @@ vm_and_traq <- run_query(getSQL("sql/vm_and_traq_eicu.sql"))
 
 ```{r}
 #Traumatic Brain Injury
-tbi <- run_query(getSQL("sql/tbi_eicu.sql"))
-tbi %<>%
+tbi_eicu <- run_query(getSQL("sql/tbi_eicu.sql"))
+tbi_eicu %<>%
   group_by(stay_id) %>%
   summarize(
     tbi_seq1=max(tbi_min_diagnosisoffset), 
     tbi_anyseq=max(tbi_any_diagnosisoffset))
 
 #General traumatisms
-trauma_general <- run_query(getSQL("sql/trauma_general_eicu.sql"))
-trauma_general %<>%
+trauma_general_eicu <- run_query(getSQL("sql/trauma_general_eicu.sql"))
+trauma_general_eicu %<>%
   group_by(stay_id) %>%
   summarize(
     traumatic_general_min_diagnosisoffset=max(traumatic_general_min_diagnosisoffset), 
     traumatic_general_any_diagnosisoffset=max(traumatic_general_any_diagnosisoffset))
 
 #Fractures
-trauma_fractures <- run_query(getSQL("sql/trauma_fractures_eicu.sql"))
-trauma_fractures %<>%
+trauma_fractures_eicu <- run_query(getSQL("sql/trauma_fractures_eicu.sql"))
+trauma_fractures_eicu %<>%
   group_by(stay_id) %>%
   summarize(
     fractures_min_diagnosisoffset=max(fractures_min_diagnosisoffset),
     fractures_any_diagnosisoffset=max(fractures_any_diagnosisoffset))
 
 #Luxations
-trauma_luxations <- run_query(getSQL("sql/trauma_luxations_eicu.sql"))
-trauma_luxations %<>%
+trauma_luxations_eicu <- run_query(getSQL("sql/trauma_luxations_eicu.sql"))
+trauma_luxations_eicu %<>%
   group_by(stay_id) %>%
   summarize(
     luxation_min_diagnosisoffset=max(luxation_min_diagnosisoffset),
     luxation_any_diagnosisoffset=max(luxation_any_diagnosisoffset))
 
 #Sprains
-trauma_sprains <- run_query(getSQL("sql/trauma_sprains_eicu.sql"))
+trauma_sprains_eicu <- run_query(getSQL("sql/trauma_sprains_eicu.sql"))
 
 #Burns
-trauma_burns <- run_query(getSQL("sql/trauma_burns_eicu.sql"))
-trauma_burns %<>%
+trauma_burns_eicu <- run_query(getSQL("sql/trauma_burns_eicu.sql"))
+trauma_burns_eicu %<>%
   group_by(stay_id) %>%
   summarize(
     burns_min_diagnosisoffset=max(burns_min_diagnosisoffset),
     burns_any_diagnosisoffset=max(burns_any_diagnosisoffset))
 
 #Contusion
-trauma_contusion <- run_query(getSQL("sql/trauma_contusions_eicu.sql"))
+trauma_contusion_eicu <- run_query(getSQL("sql/trauma_contusions_eicu.sql"))
 
 ```
 
@@ -152,25 +152,27 @@ trauma_contusion <- run_query(getSQL("sql/trauma_contusions_eicu.sql"))
 
 ```{r}
 #Patients
-patient <- run_query(getSQL("sql/patient_eicu.sql"))
+patient_eicu <- run_query(getSQL("sql/patient_eicu.sql"))
 
 #Stays in ICU
-icustays <- run_query(getSQL("sql/icustays_eicu.sql"))
+icustays_eicu <- run_query(getSQL("sql/icustays_eicu.sql"))
 ```
 
 ## Severity scores
 
 ```{r}
 #Table apachepatientresult 
-apachepatientresult <- run_query(getSQL("sql/apachepatientresult_eicu.sql"))
-apachepatientresult %<>%
+apachepatientresult_eicu <- run_query(getSQL("sql/apachepatientresult_eicu.sql"))
+apachepatientresult_eicu %<>%
   group_by(patientunitstayid) %>%
-  arrange (apachepatientresultsid) %>%
+  arrange(apachepatientresultsid) %>%
   filter(row_number() == 1)
 
 #Table apachepredvar 
-apachepredvar <- run_query(getSQL("sql/apachepredvar_eicu.sql"))
+apachepredvar_eicu <- run_query(getSQL("sql/apachepredvar_eicu.sql"))
 
+#Table charlson 
+charlson_eicu <- run_query(getSQL("sql/charlson_eicu.sql"))
 ```
 
 # Creation of Final Dataset
@@ -178,12 +180,13 @@ apachepredvar <- run_query(getSQL("sql/apachepredvar_eicu.sql"))
 ## Joining across datasets
 
 ```{r}
-# Join patients tables by patientunitstayid
+# Join tables by patientunitstayid, departing from eICU's patient table
 dataset_join <- Reduce(function(...) merge(..., by = c("patientunitstayid"), all.x=TRUE, sort = TRUE), list(
-  icustays, 
-  patient, 
-  apachepatientresult, 
-  apachepredvar))
+  patient_eicu,
+  icustays_eicu, 
+  apachepatientresult_eicu, 
+  apachepredvar_eicu, 
+  charlson_eicu))
 
 # Rename patientunitstayid to stay_id
 dataset_join %<>%
@@ -192,16 +195,16 @@ dataset_join %<>%
 # Join tables by stay_id
 dataset_join <- Reduce(function(...) merge(..., by = c("stay_id"), all.x=TRUE, sort = TRUE), list(
   dataset_join, 
-  vm_consecutive_days, 
-  vm_total_days,
-  vm_and_traq, 
-  trauma_burns, 
-  tbi,
-  trauma_contusion, 
-  trauma_fractures, 
-  trauma_general, 
-  trauma_luxations, 
-  trauma_sprains))
+  vm_consecutive_days_eicu, 
+  vm_total_days_eicu,
+  vm_and_traq_eicu, 
+  trauma_burns_eicu, 
+  tbi_eicu,
+  trauma_contusion_eicu, 
+  trauma_fractures_eicu, 
+  trauma_general_eicu, 
+  trauma_luxations_eicu, 
+  trauma_sprains_eicu))
 
 ```
 
@@ -214,14 +217,17 @@ names(dataset_join) <- tolower(names(dataset_join))
 # Rename columns for self-explanation purposes
 total_dataset <- dataset_join %>%
   rename(
-    "subject_id_first" = uniquepid.x, #individual code for each patient
-    "hadm_id_first" = patienthealthsystemstayid.x, #individual code for each hospital admission
-    "hospital_stay_days" = unabridgedhosplos, #Hospital Length of stay from apachePatientResult table. 
-    "inhospital_death" = hosp_mort, #patient death within the given hospital stay from icustays table
+    "subject_id_eicu" = uniquepid.x, #individual code for each patient
+    "hadm_id_eicu" = patienthealthsystemstayid.x, #individual code for each hospital admission
+    "age_eicu" = age.x, #age of the patient in full years. If the patient is over 89 years old specify “> 89” e.g.: 79, 36, 52, “> 89”, etc.
+    "unitvisitnumber_eicu" = unitvisitnumber.x, #identifies the visit number of the patient, i.e. if the patient’s hospital stay has multiple unit stays
+    "unitdischargeoffset" = unitdischargeoffset.x, #number of minutes from unit admit time that the patient was discharged from the unit
+    "inhospital_death" = hospitaldischargestatus, #patient death within the given hospital stay from patient table
     "inicu_death" = unitdischargestatus, #patient death within the given ICU stay from patient table
     "discharge_location" = hospitaldischargelocation, #location where the patient was discharged to from the hospital e.g.: Home, Nursing Home, Death, etc.
-    "apsiv" = acutephysiologyscore, #APS score (IV or IVa versions) from apachepatientresults table
+    "aps" = acutephysiologyscore, #APS score (IV or IVa versions) from apachepatientresults table
     "apache" = apachescore, #Apache Score. Calculated from acutePhysiologyScore
+    "charlson" = final_charlson_score, #comorbidity score charlson from SQL code calculating charlson index manually
     "gcs_verbal" = day1verbal, #from apachepredvar table
     "gcs_motor" = day1motor, #from apachepredvar table
     "gcs_eyes" = day1eyes #from apachepredvar table
@@ -229,20 +235,21 @@ total_dataset <- dataset_join %>%
 
 #Transform variables
 total_dataset %<>%
-  mutate(age.x = as.integer(ifelse(age.x == "> 89", 89, age.x)), #Convert >89 age values to 89
-         age.x = ifelse(age.x == "", NA, age.x), #Convert blank values to NA
-         gender.x = case_when(gender.x == 1 ~ "Female", gender.x == 0 ~ "Male", TRUE ~ NA_character_), #Convert 1 to "Female", 0 to "Male" and the rest to NA
-         icu_stay_days = round(icu_los_hours/24, 2), #Convert UCI hours to days
-         hospital_stay_days_all = round((hospitaldischargeoffset.x - hospitaladmitoffset.x)/1440,2), 
+  mutate(age_eicu = ifelse(age_eicu == "", NA, age_eicu), #Convert blank values to NA
+         age_eicu = as.integer(ifelse(age_eicu == "> 89", 89, age_eicu)), #Convert >89 age values to 89
+         sex = ifelse(gender.x!="Female" & gender.x!="Male", "Unknown", gender.x), #converts unknown sex values to Unknown
+         hospital_stay_days = round((hospitaldischargeoffset.x - hospitaladmitoffset.x)/1440,2), #Convert minutes to days
+         icu_stay_days = round(unitdischargeoffset/1440, 2), #Convert minutes to days
          discharge_location = ifelse(discharge_location == "", NA, discharge_location), #Convert blank values to NA
+         inhospital_death = case_when(inhospital_death == "Expired" ~ 1, inhospital_death == "Alive" ~ 0, inhospital_death == "" ~ NA), #Convert Expired to 1, Alive to 0 and null to NA
          inicu_death = case_when(inicu_death == "Expired" ~ 1, inicu_death == "Alive" ~ 0, inicu_death == "" ~ NA), #Convert Expired to 1, Alive to 0 and null to NA
-         discharge_location = ifelse(is.na(discharge_location) & inicu_death == 1, "Death", discharge_location), #for NA values in discharge_location variable, fill with "Death" when the patient died in ICU
-         inhospital_death = ifelse(is.na(inhospital_death) & inicu_death == 1, 1, inhospital_death) #for NA values in inhospital_death variable, fill with 1 when the patient died in ICU, since if the patient died in ICU therefore he died in hospital as well
+         inhospital_death = ifelse(is.na(inhospital_death) & inicu_death == 1, 1, inhospital_death), #for NA values in inhospital_death variable, fill with 1 when the patient died in ICU, since if the patient died in ICU therefore he died in hospital as well
+         discharge_location = ifelse(is.na(discharge_location) & inhospital_death == 1, "Death", discharge_location) #for NA values in discharge_location variable, fill with "Death" when the patient died in ICU
           )
 
 # Create variable days_of_death and death_30days
 total_dataset %<>%
-  mutate(days_of_death = as.numeric(ifelse(discharge_location == "Death", hospital_stay_days_all, -1)), #if the patient is dead, the hospital length of stay represents the days of death from hospital admission. If the patient is alive, a value of -1 is given  
+  mutate(days_of_death = as.numeric(ifelse(discharge_location == "Death" | is.na(discharge_location), hospital_stay_days, -1)), #if the patient is dead, the hospital length of stay represents the days of death from hospital admission. If the patient is alive, a value of -1 is given  
          death_30days = ifelse(days_of_death <=30 & days_of_death != -1, 1, 0) #patient death before 30 days from ICU admission
          )
 
@@ -262,7 +269,7 @@ total_dataset %<>%
     mv_total_7days = as.integer(ifelse(total_vm_days>=7, 1, 0)),
     mv_total_14days = as.integer(ifelse(total_vm_days>=14, 1, 0)),
     mv_total_21days = as.integer(ifelse(total_vm_days>=21, 1, 0)),
-    mv_96traq = as.integer(ifelse(!is.na(event), 1, 0)),
+    mv_96traq = as.integer(ifelse(airwaytype=="Tracheostomy" & consecutive_vm_days>=4, 1, 0)),
     prolonged_mec_vent = as.integer(ifelse((mv_consecutive_14days == 1 |
                                              mv_96traq == 1), 1, 0))
       )
@@ -274,12 +281,13 @@ total_dataset %<>%
 ```{r}
 # Select the desired columns and order the result
 total_dataset_selected <- total_dataset %>%
-  select(subject_id_first, hadm_id_first, stay_id, unitvisitnumber.x, age.x, gender.x, hospital_stay_days, hospital_stay_days_all, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiv, apache, gcs_verbal, gcs_motor, gcs_eyes) %>%
-  rename("subject_id" = subject_id_first, 
-         "hadm_id" = hadm_id_first, 
-         "age" = age.x,
-         "gender" = gender.x,
-         "unitvisitnumber" = unitvisitnumber.x) %>% 
+  select(subject_id_eicu, hadm_id_eicu, stay_id, unitvisitnumber_eicu, age_eicu, sex, hospitaladmitoffset.x, unitdischargeoffset, hospitaldischargeoffset.x, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, aps, apache, charlson, gcs_verbal, gcs_motor, gcs_eyes) %>%
+  rename("subject_id" = subject_id_eicu,
+         "hadm_id" = hadm_id_eicu,
+         "age" = age_eicu,
+         "hospitaladmitoffset" = hospitaladmitoffset.x, 
+         "hospitaldischargeoffset" = hospitaldischargeoffset.x,
+         "unitvisitnumber" = unitvisitnumber_eicu) %>% 
   arrange(subject_id, unitvisitnumber)
 ```
 
@@ -305,20 +313,20 @@ gg_miss_var(total_dataset_selected, show_pct=TRUE)
 # Columns NA filling
 total_dataset_clean <- total_dataset_selected %>%
   mutate(
-    age = as.integer(ifelse(is.na(age), modeest::mfv(age, na_rm=TRUE), age)), # NAs are filled with the most frequent value (mode)
-    gender = as.factor(fct_explicit_na(gender, na_level = "Unknown")), #NA values of gender are converted to "Unknown"
-    gender = relevel(gender, ref = "Male"), #change reference level of factor gender variable to "Male"
+    age = ifelse(is.na(age), modeest::mfv(age, na_rm=TRUE), age), #NAs are filled with the most frequent value (mode)
+    sex = ifelse(is.na(sex), "Unknown", sex), #NA values of sex are converted to "Unknown"
     discharge_location = as.factor(ifelse(is.na(discharge_location), modeest::mfv(discharge_location), discharge_location)), # as a non-dichotomous categorical variable, NAs are filled with the most frequent value (mode)
     across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), ~ifelse(is.na(.), 0, .)), #NA values from dichotomous variables are filled with 0
     across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), as.integer),
     #apsiv and apache variables are omitted since they display a 26% of NA values
+    aps = as.integer(ifelse(is.na(aps), modeest::mfv(aps, na_rm=TRUE), aps)), #NAs are filled with the most frequent value (mode)
+    apache = ifelse(is.na(apache), modeest::mfv(age, na_rm=TRUE), age), #NAs are filled with the most frequent value (mode)
     across(gcs_verbal:gcs_eyes, ~ifelse(. == -1, 1, .)), #convert values equal to -1 to 1, the minimal value for each gcs variable. This could be due in eICU database to various reasons, such as the patient being intubated, sedated, paralyzed or with an eye injury that prevents evaluating their response. In these cases, a value of -1 is assigned to indicate that the data is missing or not applicable.
+    gcs_original = as.integer(gcs_verbal + gcs_motor + gcs_eyes), #original gcs value before NA imputation
     across(gcs_verbal:gcs_eyes, ~ifelse(is.na(.), modeest::mfv(., na_rm=TRUE), .)), #fill NA values with the mode
-    gcs_min = as.integer(gcs_verbal + gcs_motor + gcs_eyes) #total gcs value is the sum of verbal, motor and eyes (minimum: 3, maximum: 15)
+    gcs = as.integer(gcs_verbal + gcs_motor + gcs_eyes) #total gcs value is the sum of verbal, motor and eyes (minimum: 3, maximum: 15)
   )
 
-total_dataset_clean_selected <- total_dataset_clean %>%
-  select(-c(hospital_stay_days, days_of_death, apsiv, apache))
 ```
 
 ## Confirm 0% missingness
@@ -326,25 +334,25 @@ total_dataset_clean_selected <- total_dataset_clean %>%
 # Map missingness in total_dataset_clean after NA filling  
 ##Columns with na values
 print('Columns in total_dataset_clean having NAs')
-names(total_dataset_clean_selected)[colSums(is.na(total_dataset_clean_selected)) > 0]
+names(total_dataset_clean)[colSums(is.na(total_dataset_clean)) > 0]
 
 print('Nº of columns with na values')
-n_var_miss(total_dataset_clean_selected)
+n_var_miss(total_dataset_clean)
 
 ##Plot columns and show descriptive table with NA values
-miss_summary_postclean <- miss_var_summary(total_dataset_clean_selected)
+miss_summary_postclean <- miss_var_summary(total_dataset_clean)
 miss_summary_postclean
-gg_miss_var(total_dataset_clean_selected, show_pct=TRUE)
+gg_miss_var(total_dataset_clean, show_pct=TRUE)
   
 ```
 
 ## Creation of additional variables
 ```{r}
 # Create variable tbi severe and non-severe tbi, as well as trauma_type, containing 4 types of trauma in our dataset: TBI, general traumatism without TBI, severe TBI, non-severe TBI, for both seq1 and anyseq 
-total_dataset_clean_selected %<>%
+total_dataset_clean %<>%
   mutate(
-    tbi_severe_seq1 = as.integer(ifelse(tbi_seq1 == 1 & gcs_min <= 8, 1, 0)),
-    tbi_nonsevere_seq1 = as.integer(ifelse(tbi_seq1 == 1 & gcs_min > 8, 1, 0)),
+    tbi_severe_seq1 = as.integer(ifelse(tbi_seq1 == 1 & gcs <= 8, 1, 0)),
+    tbi_nonsevere_seq1 = as.integer(ifelse(tbi_seq1 == 1 & gcs > 8, 1, 0)),
     trauma_type_seq1 = as.factor(
       ifelse(anytrauma_seq1 == 0, "non_trauma",
              ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "trauma_non_tbi",
@@ -352,8 +360,8 @@ total_dataset_clean_selected %<>%
                            ifelse(tbi_nonsevere_seq1 == 1, "tbi_non_severe", NA)))
       )
     ),
-    tbi_severe_anyseq = as.integer(ifelse(tbi_anyseq == 1 & gcs_min <= 8, 1, 0)),
-    tbi_nonsevere_anyseq = as.integer(ifelse(tbi_anyseq == 1 & gcs_min > 8, 1, 0)),
+    tbi_severe_anyseq = as.integer(ifelse(tbi_anyseq == 1 & gcs <= 8, 1, 0)),
+    tbi_nonsevere_anyseq = as.integer(ifelse(tbi_anyseq == 1 & gcs > 8, 1, 0)),
     trauma_type_anyseq = as.factor(
       ifelse(anytrauma_anyseq == 0, "non_trauma",
              ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "trauma_non_tbi",
@@ -363,30 +371,44 @@ total_dataset_clean_selected %<>%
     )
   )
 
+# Convert categorical variables to factor
+total_dataset_clean %<>%
+  mutate(sex = as.factor(sex),
+         sex = relevel(sex, ref = "Female"), #change reference level of factor sex variable to "Male"
+         discharge_location = as.factor(discharge_location), 
+         trauma_type_seq1 = as.factor(trauma_type_seq1), 
+         trauma_type_seq1 = relevel(trauma_type_seq1, ref = "non_trauma"),
+         trauma_type_anyseq = as.factor(trauma_type_anyseq), 
+         trauma_type_anyseq = relevel(trauma_type_anyseq, ref = "non_trauma"))
+
+
 # Select and order columns
-total_dataset_clean_selected %<>% 
-  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, consecutive_vm_days:prolonged_mec_vent, gcs_min) %>%
+total_dataset_clean_selected <- total_dataset_clean %>% 
+  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, consecutive_vm_days:prolonged_mec_vent, aps, apache, charlson, gcs_original, gcs, gcs_verbal, gcs_motor, gcs_eyes) %>%
   arrange(subject_id, unitvisitnumber)
 ```
-
 
 ## Final Dataset
 ```{r}
 # Group all stay_id within joint hospital admissions
 
-#Summarizing variables into hadm_id groups
-final_dataset_hadmid <- total_dataset_clean_selected %>%
+#Summarizing variables into hadm_id groups. The first ICU stay has been included, although the whole ICU stay for that hospital admission has been summarized
+group_dataset_1 <- total_dataset_clean_selected %>%
   group_by(subject_id, hadm_id) %>%
   arrange (unitvisitnumber) %>% 
   summarize(
     age=min(age), 
-    gender=first(gender), 
-    unitvisitnumber=n(), 
-    hospital_stay_days_all=first(hospital_stay_days_all),
+    sex=first(sex), 
+    unitvisitnumber=first(unitvisitnumber), 
+    hospitaladmitoffset=first(hospitaladmitoffset),
+    unitdischargeoffset=last(unitdischargeoffset),
+    hospitaldischargeoffset=first(hospitaldischargeoffset),
+    hospital_stay_days=first(hospital_stay_days),
     icu_stay_days=sum(icu_stay_days), 
     discharge_location=last(discharge_location),
     inhospital_death=max(inhospital_death), 
     inicu_death=max(inicu_death), 
+    days_of_death = max(days_of_death),
     death_30days=max(death_30days), 
     tbi_seq1=first(tbi_seq1), 
     tbi_anyseq=first(tbi_anyseq), 
@@ -408,14 +430,67 @@ final_dataset_hadmid <- total_dataset_clean_selected %>%
     mv_total_21days = ifelse(total_vm_days>=21, 1, 0),
     mv_96traq=max(mv_96traq),
     prolonged_mec_vent=max(prolonged_mec_vent), 
-    gcs_min = min(gcs_min)
           ) %>%
     arrange(subject_id)
 
+#Select severity and comorbidity scores related to first ICU stay for each hospital admission   
+group_dataset_2 <- total_dataset_clean_selected %>%
+  group_by(subject_id, hadm_id) %>%
+  arrange (unitvisitnumber) %>% 
+  filter(row_number()==1) %>%
+  select(aps:gcs_eyes) %>%
+  arrange(subject_id)
+
+#Merging two grouped datasets
+final_dataset_hadmid <- group_dataset_1 %>%
+  left_join(group_dataset_2, by = c("subject_id","hadm_id"))
+
+#Print flowchart grouping criteria
+cat(sprintf('%d unique patients in ICU in original eICU database.\n', nrow(total_dataset_clean_selected)))
+rows_excluded_hadmid <- nrow(total_dataset_clean_selected)-nrow(group_dataset_1)
+cat(sprintf('%d patients with unique hospital id, excluding %d rows.\n', nrow(group_dataset_1), rows_excluded_hadmid))
+
+
 ```
+
+## Exclusion criteria
+```{r}
+# Apply exclusion filters and print rows excluded
+
+## Removing under age patients
+final_dataset_hadmid_excluded1 <- final_dataset_hadmid %>%
+  filter(age>=18)
+rows_excluded_age <- nrow(final_dataset_hadmid)-nrow(final_dataset_hadmid_excluded1)
+cat(sprintf('%d patients remaining, with %d patients having <18 years old.\n', nrow(final_dataset_hadmid_excluded1), rows_excluded_age))
+
+## Removing negative hospital admission offset
+final_dataset_hadmid_excluded2 <- final_dataset_hadmid_excluded1 %>%
+  filter(hospitaladmitoffset<=0) #the value should be negative as it is "number of minutes from unit admit time that the patient was admitted to the hospital", and otherwise it would mean ICU admission happened before hospital admission
+rows_excluded_hospadmit <- nrow(final_dataset_hadmid_excluded1)-nrow(final_dataset_hadmid_excluded2)
+cat(sprintf('%d patients remaining, with %d patients having hospital admission prior to ICU admission.\n', nrow(final_dataset_hadmid_excluded2), rows_excluded_hospadmit))
+
+## Removing negative ICU length of stay
+final_dataset_hadmid_excluded3 <- final_dataset_hadmid_excluded2 %>%
+  filter(icu_stay_days>=0) 
+rows_excluded_los <- nrow(final_dataset_hadmid_excluded2)-nrow(final_dataset_hadmid_excluded3)
+cat(sprintf('%d patients remaining, with %d patients having negative ICU length of stay.\n', nrow(final_dataset_hadmid_excluded3), rows_excluded_los))
+
+```
+
+
 # Export file
 
 ```{r}
-write.csv(final_dataset_hadmid,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset.csv', row.names = F)
+write.csv(final_dataset_hadmid_excluded,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv', row.names = F)
 ```
 
+# Load File
+
+```{r}
+# Load file
+final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv')
+
+# Print final dataset and data frame summary
+View(final_dataset_eICU)
+stview(dfSummary(final_dataset_eICU))
+```

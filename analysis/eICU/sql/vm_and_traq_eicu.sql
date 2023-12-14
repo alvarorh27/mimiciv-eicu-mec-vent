@@ -1,9 +1,8 @@
+/*Select tracheostomy procedures in respiratorycare table*/
 SELECT
-  patientunitstayid AS stay_id,
-  event,
-  hrs
+DISTINCT(patientunitstayid) AS stay_id, 
+airwaytype
 FROM
-  `physionet-data.eicu_crd_derived.ventilation_events`
+  `physionet-data.eicu_crd.respiratorycare`
 WHERE
-  event = "Trach"
-  AND hrs>=96
+airwaytype = "Tracheostomy"

@@ -25,7 +25,7 @@ final_dataset_MIMICIV <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-v
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'gender', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_MIMICIV[,vars_in_table1]
@@ -55,16 +55,16 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
  
 # For console
  table1_tbi %>%
-   kbl(caption = "Table 1 of base model: Traumatic Brain Injury" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Traumatic Brain Injury. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", ""))
 
 # Export kable 
   table1_tbi %>%
-   kbl(caption = "Table 1 of base model: Traumatic Brain Injury" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Traumatic Brain Injury. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_tbi.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_tbi_mimiciv.jpg", zoom = 10)
 
 ```
 
@@ -72,7 +72,7 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'gender', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_MIMICIV[,vars_in_table1]
@@ -103,23 +103,23 @@ table1_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
  
 # For console
  table1_pmv %>%
-   kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", ""))
  
 #Export kable
  table1_pmv %>%  
-   kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>% 
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_pmv.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_pmv_mimiciv.jpg", zoom = 10)
 ```
 
 # Table one: Hospital Mortality
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'gender', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_MIMICIV[,vars_in_table1]
@@ -150,16 +150,16 @@ table1_death30days<-print(CreateTableOne(vars = vars_in_table1, strata = stratif
  
 # For console
  table1_death30days %>%
-   kbl(caption = "Table 1 of base model: Hospital Mortality" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Hospital Mortality. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", ""))
  
 # Export kable
  table1_death30days %>%
-   kbl(caption = "Table 1 of base model: Hospital Mortality" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Hospital Mortality. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_hospdeath.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_hospdeath_mimiciv.jpg", zoom = 10)
  
 ```
 
@@ -167,7 +167,7 @@ table1_death30days<-print(CreateTableOne(vars = vars_in_table1, strata = stratif
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'gender', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_MIMICIV[,vars_in_table1]
@@ -198,23 +198,23 @@ table1_deathyear<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyb
  
 # For console
  table1_deathyear %>%
-   kbl(caption = "Table 1 of base model: Mortality at 1 year" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Mortality at 1 year. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", ""))
  
 # Export kable
  table1_deathyear %>%
-   kbl(caption = "Table 1 of base model: Mortality at 1 year" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Mortality at 1 year. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_deathyear.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_deathyear_mimiciv.jpg", zoom = 10)
 ```
 
 # Table one: TBI and PMV
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'gender', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs')
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_MIMICIV[,vars_in_table1]
@@ -245,16 +245,16 @@ table1_tbi_and_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratif
  
 # For console
  table1_tbi_and_pmv %>%
-   kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation" ,     align = "c") %>%
+   kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation. MIMIC-IV Database" ,     align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " "))
  
 # Export kable
  table1_tbi_and_pmv %>%
-   kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation" ,     align = "c") %>%
+   kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation. MIMIC-IV Database" ,     align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_tbi_and_pmv.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_tbi_and_pmv_mimiciv.jpg", zoom = 10)
 ```
 
 # Table one: Subset of TBI and PMV
@@ -265,7 +265,7 @@ table1_dataset <- final_dataset_MIMICIV %>%
   filter(tbi_anyseq==1 & prolonged_mec_vent==1)
 
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'gender', 'hospital_stay_days', 'icu_stay_days', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_severe_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'inhospital_death', 'inicu_death', 'death_30days', 'death_year', 'tbi_severe_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'apsiii', 'sapsii', 'charlson', 'gcs') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- table1_dataset[,vars_in_table1] 
@@ -295,15 +295,15 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
  
 # For console
  table1_tbi %>%
-   kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "Non-severe TBI", "Severe TBI", "", ""))
 
 # Export kable 
   table1_tbi %>%
-   kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV" , align = "c") %>%
+   kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV. MIMIC-IV Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "Non-severe TBI", "Severe TBI", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_subset_tbi-pmv.jpg", zoom = 10)
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/table1/table1_subset_tbi-pmv_mimiciv.jpg", zoom = 10)
 
 ```

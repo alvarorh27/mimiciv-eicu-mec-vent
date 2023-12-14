@@ -19,6 +19,7 @@ library(broom)
 library(htmlTable)
 library(randomForest)
 library(caret)
+library(kableExtra)
 
 # metric performance
 precision <- function(matrix) {
@@ -43,340 +44,319 @@ extract_coef_pval_OR <- function(model) {
                        statistic = model$coefficients / sqrt(diag(vcov(model))),
                        p.value = 2 * (1 - pnorm(abs(statistic))),
                        OR = round(exp(estimate),2),
-                       OR_CI_lower = round(exp(estimate - 1.96 * std.error),2),
-                       OR_CI_upper = round(exp(estimate + 1.96 * std.error),2)
+                       OR_lower = round(exp(estimate - 1.96 * std.error),2),
+                       OR_upper = round(exp(estimate + 1.96 * std.error),2)
   )
   )
 } 
 ```
 
-#Load File
+# Load File
 
 ```{r}
-final_dataset <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset.csv')
+final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv')
 ```
 
 
-# Logistic Regression_mortality at 30 days
+# Logistic Regression
 
-## Fitting the model
+## Hospital Mortality: PMV
+
+### Fitting the model
 
 ```{r}
-print('Logistic Regression of mortality at 30 days')
+print('Logistic Regression of hospital mortality')
 print(Sys.time())
-logreg_death30days <- glm(
-   death_30days ~ age + gender + hospital_stay_days_all + icu_stay_days + tbi_seq1 + tbi_severe_seq1 + anytrauma_seq1 + tbi_anyseq + tbi_severe_anyseq + anytrauma_anyseq + consecutive_vm_days + prolonged_mec_vent + gcs_min,
-  data =  final_dataset,
-  family=binomial())
+logreg_hospdeath <- glm(
+   inhospital_death ~ age + sex + prolonged_mec_vent + aps + charlson,
+  data = final_dataset_eICU,
+  family = binomial())
 print(Sys.time())
 ```
 
-## Odds ratio
-
-```{r fig.height=16, fig.width=10}
-coef_pval_df_death30days_1 <- extract_coef_pval_OR(logreg_death30days)
-
-write.csv(coef_pval_df_death30days_1,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/oddsratio_death30days_eicu.csv')
-htmlTable(coef_pval_df_death30days_1[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio for death at 30 days. eICU Database")
-```
-
-## Forest Plot
+### Odds ratio and Forest plot
 
 ```{r}
-coef_pval_df_death30days_2 <- coef_pval_df_death30days_1 %>% 
-  mutate(orden = case_when(term == "age" ~ 1,
-                           term == "genderMale" ~ 2,
-                           term == "hospital_stay_days_all" ~ 3,
-                           term == "icu_stay_days" ~ 4,
-                           term == "tbi_seq1" ~ 5,
-                           term == "tbi_severe_seq1" ~ 6,
-                           term == "anytrauma_seq1" ~ 7,
-                           term == "tbi_anyseq" ~ 8,
-                           term == "tbi_severe_anyseq" ~ 9,
-                           term == "anytrauma_anyseq" ~ 10,
-                           term == "consecutive_vm_days" ~ 11,
-                           term == "prolonged_mec_vent" ~ 12,
-                           term == "gcs_min" ~ 13,
-                           term == "(Intercept)" ~ 14,
-                           TRUE ~ 999),
-         term = case_when(term == "age" ~ "Age (years)",
-                           term == "genderMale" ~ "Gender (male)",
-                           term == "hospital_stay_days_all" ~ "Lengh of hospital stay (days)",
-                           term == "icu_stay_days" ~ "Lenght of ICU stay (days)",
-                           term == "tbi_seq1" ~ "TBI as first diagnostics",
-                           term == "tbi_severe_seq1" ~ "Severe TBI as first diagnostics",
-                           term == "anytrauma_seq1" ~ "Traumatism as first diagnostics",
-                           term == "tbi_anyseq" ~ "TBI as any diagnostic order",
-                           term == "tbi_severe_anyseq" ~ "Severe TBI as any diagnostics",
-                           term == "anytrauma_anyseq" ~ "Traumatism as any diagnostic order",
-                           term == "consecutive_vm_days" ~ "Consecutive days with >6 hour ventilation",
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "TBI as any diagnostic order", "Severe TBI as any diagnostics", "Traumatism as any diagnostic order", "Consecutive days with >6 hour ventilation", "PMV > consecutive 7 days", "PMV > consecutive 14 days", "PMV > consecutive 21 days", "MV for 96h + traqueostomy", "PMV - Prolonged Mechanical Ventilation"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "age" ~ "Age (years)",
+                           term == "sexMale" ~ "Sex (male)",
                            term == "prolonged_mec_vent" ~ "PMV - Prolonged Mechanical Ventilation",
-                           term == "gcs_min" ~ "GCS",
-                           TRUE ~ term)) %>% 
-  arrange(desc(orden)) %>% 
-  select(-orden) %>% 
-  filter(term != "(Intercept)") %>% 
-  mutate(term = factor(term, levels = term, ordered = TRUE))
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
 
-ggplot(coef_pval_df_death30days_2, 
-       aes(x=term, y=OR, ymin=OR_CI_lower, ymax=OR_CI_upper)) +
-  geom_hline(yintercept=1, colour = "blue", linewidth=0.8, linetype="dotted") +
-  geom_pointrange(alpha=0.7, shape=15) +
-  geom_vline(xintercept=0, linewidth=1.2) +
-  scale_x_discrete(expand = expansion(add = c(1, 0.8))) + 
-  scale_y_continuous(expand = expansion(add = c(0.1, 0.1))) +
-  scale_y_log10(limits = c(0.01, 22)) +
-  coord_flip() +
-  labs(y="Odds Ratio", x=NULL) +
-  ggtitle('Mortality at 30 days. eICU Database') +
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/or_hospdeath_PMV_eicu.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV_eicu.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. eICU Database") +
   theme_minimal() +
-  theme(legend.text = element_text(size = 10), legend.spacing.y = unit(1, "cm"))
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome") +
+  scale_x_continuous(limits = c(0, 5)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
 
-
-# Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/oddsratio_death30days_eicu.png", width = 6, height = 4, dpi = 300)
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_PMV_eicu.png", width = 10, height = 4, dpi = 300)
 ```
-## Model Performance
+## Hospital Mortality: Trauma types
 
-```{r eval=FALSE, include=FALSE}
-y_test <- final_dataset$death_30days
+### Fitting the model
 
-predict <- predict(logreg_death_30days, final_dataset, type = 'response')
-
-# Confusion matrix
-table_mat <- table(y_test, predict > 0.90)
-table_mat
-
-accuracy <- sum(diag(table_mat)) / sum(table_mat)
-accuracy
-
-prec <- precision(table_mat)
-prec
-
-rec <- recall(table_mat)
-rec
-
-f1 <- 2 * ((prec * rec) / (prec + rec))
-f1
-
-# AUTOC plot
-predicted_death <- as.numeric(c(predict > 0.1))
-rocobj <- roc(y_test, predicted_death)
-
-auc <- round(auc(y_test, predicted_death),2)
-
-# Create ROC plot
-ggroc(rocobj, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
-
-metrics <- round(as.data.frame(rbind(accuracy,auc)),2)
-metrics$metric <- rownames(metrics)
-metrics$metric <- toupper(metrics$metric)
-
-names(metrics) <- c('Value', 'Metric')
-
-model_performance <- ggplot(data=metrics, aes(x=Metric, y=Value)) +
-  geom_bar(stat="identity", fill="steelblue")+
-  geom_text(aes(label=Value), vjust=1.6, color="white", size=3.5)+
-  theme_minimal()
-model_performance
-```
-
-
-# Logistic regression model with interaction term. Mortality at 30 days 
-
-## Interaction term PMV and TBI
 ```{r}
-# Fit a logistic regression model with interaction term
-logreg_interactive_death30days <-
-  glm(
-    death_30days ~ prolonged_mec_vent * tbi_anyseq + age + gender + consecutive_vm_days + gcs_min,
-    data = final_dataset,
-    family = binomial
-  )
+print('Logistic Regression of hospital mortality')
+print(Sys.time())
+logreg_hospdeath <- glm(
+   inhospital_death ~ age + sex + trauma_type_anyseq + aps + charlson,
+  data = final_dataset_eICU,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "TBI - non severe", "TBI - severe", "Trauma-not TBI"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "age" ~ "Age (years)",
+                          term == "sexMale" ~ "Sex (male)",
+                          term == "trauma_type_anyseqtbi_non_severe" ~ "TBI - non severe",
+                          term == "trauma_type_anyseqtbi_severe" ~ "TBI - severe",
+                          term == "trauma_type_anyseqtrauma_non_tbi" ~ "Trauma-not TBI",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/or_hospdeath_TBI_eicu.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_TBI_eicu.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. eICU Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome") +
+  scale_x_continuous(limits = c(0, 12)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_TBI_eicu.png", width = 10, height = 4, dpi = 300)
+```
+
+# Logistic Regression with interaction
+
+## Hospital Mortality: PMV and trauma types
+
+### Fitting the model
+
+```{r}
+print('Logistic Regression of hospital mortality')
+print(Sys.time())
+logreg_hospdeath <- glm(
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
+  data = final_dataset_eICU,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "PMV", "TBI-non severe", "TBI-severe", "Trauma-not TBI", "PMV + TBI-non severe", "PMV + TBI-severe", "PMV + Trauma - no TBI"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "prolonged_mec_vent" ~ "PMV",
+                          term == "trauma_type_anyseqtbi_non_severe" ~ "TBI-non severe",
+                          term == "trauma_type_anyseqtbi_severe" ~ "TBI-severe",
+                          term == "trauma_type_anyseqtrauma_non_tbi" ~ "Trauma-not TBI",
+                          term == "prolonged_mec_vent:trauma_type_anyseqtbi_non_severe" ~ "PMV + TBI-non severe",
+                          term == "prolonged_mec_vent:trauma_type_anyseqtbi_severe" ~ "PMV + TBI-severe",
+                          term == "prolonged_mec_vent:trauma_type_anyseqtrauma_non_tbi" ~ "PMV + Trauma - no TBI",
+                          term == "age" ~ "Age (years)",
+                          term == "sexMale" ~ "Sex (male)",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/or_hospdeath_PMV-TBI_eicu.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV-TBI_eicu.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. eICU Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome") +
+  scale_x_continuous(limits = c(0, 13)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_PMV-TBI_eicu.png", width = 10, height = 4, dpi = 300)
+```
+
+# Interaction of PMV and Trauma types
+
+```{r}
+print('Logistic Regression of hospital mortality')
+print(Sys.time())
+logreg_hospdeath <- glm(
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
+  data = final_dataset_eICU,
+  family = binomial())
+print(Sys.time())
 
 # Print the model summary
-print('Model summary of logistic regression model with interaction term between PMV and TBI for death at 30 days')
-summary(logreg_interactive_death30days)
+print('Model summary of logistic regression model with interaction term between PMV and trauma type for hospital death')
+summary(logreg_hospdeath)
 
 # Perform an analysis of variance (ANOVA) to test the significance of the interaction
-anova(logreg_interactive_death30days, test = "Chisq")
+anova(logreg_hospdeath, test = "Chisq")
 
 print('If the interaction is significant, we can proceed with post-hoc analyses to explore the nature of the interaction')
 
 # Plot the interaction effect
-ggplot(final_dataset, aes(x = prolonged_mec_vent, y = death_30days, color = factor(tbi_anyseq))) +
+ggplot(final_dataset_eICU, aes(x = prolonged_mec_vent, y = inhospital_death, color = factor(trauma_type_anyseq))) +
   geom_point() +
   geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
-  labs(x = "Prolonged Mechanical Ventilation", y = "Mortality at 30 Days", color = "TBI", title = "Interaction Effect of TBI and PMV on Death at 30 days. eICU Database") +
+  labs(x = "Prolonged Mechanical Ventilation", y = "Hospital Mortality", color = "Type of Trauma", title = "Interaction Effect of PMV and Trauma types on Hospital Death. eICU Database") +
   theme_minimal()
 
 # Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/interaction_pmv_tbi_30days_eicu.png", width = 6, height = 4, dpi = 300)
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/interactionplot_PMV-TBI_eicu.png", width = 6, height = 4, dpi = 300)
 
-# Print Odds Ratio
-coef_pval_df_interactive_tbianyseq_death30days <- extract_coef_pval_OR(logreg_interactive_death30days)
-htmlTable(coef_pval_df_interactive_tbianyseq_death30days[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio for death at 30 days by interaction terms PMV and TBI. eICU Database")
-
-# Forest Plot
-coef_pval_df_interactive_tbianyseq_death30days_2 <- coef_pval_df_interactive_tbianyseq_death30days %>% 
-  mutate(orden = case_when(term == "prolonged_mec_vent" ~ 1,
-                           term == "tbi_anyseq" ~ 2,
-                           term == "prolonged_mec_vent:tbi_anyseq" ~ 3,
-                           term == "age" ~ 4,
-                           term == "genderMale" ~ 5,
-                           term == "consecutive_vm_days" ~ 6,
-                           term == "gcs_min" ~ 7,
-                           term == "(Intercept)" ~ 8,
-                           TRUE ~ 999),
-         term = case_when(term == "prolonged_mec_vent" ~ "PMV",
-                           term == "tbi_anyseq" ~ "TBI",
-                           term == "prolonged_mec_vent:tbi_anyseq" ~ "TBI + PMV",
-                           term == "age" ~ "Age (years)",
-                           term == "genderMale" ~ "Gender (male)",
-                           term == "consecutive_vm_days" ~ "Consecutive days with >6 hour ventilation",
-                           term == "gcs_min" ~ "GCS",
-                           TRUE ~ term)) %>% 
-  arrange(desc(orden)) %>% 
-  select(-orden) %>% 
-  filter(term != "(Intercept)") %>% 
-  mutate(term = factor(term, levels = term, ordered = TRUE))
-
-ggplot(coef_pval_df_interactive_tbianyseq_death30days_2, 
-       aes(x=term, y=OR, ymin=OR_CI_lower, ymax=OR_CI_upper)) +
-  geom_hline(yintercept=1, colour = "blue", linewidth=0.8, linetype="dotted") +
-  geom_pointrange(alpha=0.7, shape=15) +
-  geom_vline(xintercept=0, linewidth=1.2) +
-  scale_x_discrete(expand = expansion(add = c(1, 0.8))) + 
-  scale_y_continuous(expand = expansion(add = c(0.1, 0.1))) +
-  scale_y_log10(limits = c(0.01, 4)) +
-  coord_flip() +
-  labs(y="Odds Ratio", x=NULL) +
-  ggtitle('Mortality at 30 days. Interaction between PMV and TBI. eICU Database') +
-  theme_minimal() +
-  theme(legend.text = element_text(size = 10), legend.spacing.y = unit(1, "cm"))
-
-# Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/forestplot_pmv_tbi_30days_eicu.png", width = 6, height = 4, dpi = 300)
-
-
-```
-
-## Interaction term PMV and trauma_type_anyseq
-```{r}
-# Fit a logistic regression model with interaction term
-logreg_interactive_death30days_2 <-
-  glm(
-    death_30days ~ prolonged_mec_vent + trauma_type_anyseq + prolonged_mec_vent * trauma_type_anyseq + age + gender + consecutive_vm_days + gcs_min,
-    data = final_dataset,
-    family = binomial
-  )
-
-# Print the model summary
-print('Model summary of logistic regression model with interaction term between PMV and trauma type for death at 30 days')
-summary(logreg_interactive_death30days_2)
-
-# Perform an analysis of variance (ANOVA) to test the significance of the interaction
-anova(logreg_interactive_death30days_2, test = "Chisq")
-
-print('If the interaction is significant, we can proceed with post-hoc analyses to explore the nature of the interaction')
-
-# Plot the interaction effect
-ggplot(final_dataset, aes(x = prolonged_mec_vent, y = death_30days, color = factor(trauma_type_anyseq))) +
-  geom_point() +
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
-  labs(x = "Prolonged Mechanical Ventilation", y = "Mortality at 30 Days", color = "Type of Trauma", title = "Interaction Effect of PMV and Type of Trauma on Death at 30 days. eICU Database") +
-  theme_minimal()
-
-# Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/interaction_pmv_traumatype_30days_eicu.png", width = 6, height = 4, dpi = 300)
-
-# Print Odds Ratio
-coef_pval_df_interactive_traumatype_death30days <- extract_coef_pval_OR(logreg_interactive_death30days_2)
-htmlTable(coef_pval_df_interactive_traumatype_death30days[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio for death at 30 days by interaction terms PMV and Trauma Types. eICU Database")
-
-# Forest Plot
-coef_pval_df_interactive_traumatype_death30days_2 <- coef_pval_df_interactive_traumatype_death30days %>% 
-  mutate(orden = case_when(term == "prolonged_mec_vent" ~ 1,
-                           term == "trauma_type_anyseqtbi_non_severe" ~ 2,
-                           term == "trauma_type_anyseqtbi_severe" ~ 3,
-                           term == "trauma_type_anyseqtrauma_non_tbi" ~ 4,
-                           term == "prolonged_mec_vent:trauma_type_anyseqtbi_non_severe" ~ 5,
-                           term == "prolonged_mec_vent:trauma_type_anyseqtbi_severe" ~ 6,
-                           term == "prolonged_mec_vent:trauma_type_anyseqtrauma_non_tbi" ~ 7,                                                  term == "age" ~ 8,
-                           term == "genderMale" ~ 9,
-                           term == "consecutive_vm_days" ~ 10,
-                           term == "gcs_min" ~ 11,
-                           term == "(Intercept)" ~ 12,
-                           TRUE ~ 999),
-         term = case_when(term == "prolonged_mec_vent" ~ "PMV",
-                           term == "trauma_type_anyseqtbi_non_severe" ~ "TBI-non severe",
-                           term == "trauma_type_anyseqtbi_severe" ~ "TBI-severe",
-                           term == "trauma_type_anyseqtrauma_non_tbi" ~ "Trauma-not TBI",
-                           term == "prolonged_mec_vent:trauma_type_anyseqtbi_non_severe" ~ "PMV + TBI-non severe",
-                           term == "prolonged_mec_vent:trauma_type_anyseqtbi_severe" ~ "PMV + TBI-severe",
-                           term == "prolonged_mec_vent:trauma_type_anyseqtrauma_non_tbi" ~ "PMV + Trauma-not TBI",
-                           term == "age" ~ "Age (years)",
-                           term == "genderMale" ~ "Gender (male)",
-                           term == "consecutive_vm_days" ~ "Consecutive days with >6 hour ventilation",
-                           term == "gcs_min" ~ "GCS",
-                           TRUE ~ term)) %>% 
-  arrange(desc(orden)) %>% 
-  select(-orden) %>% 
-  filter(term != "(Intercept)") %>% 
-  mutate(term = factor(term, levels = term, ordered = TRUE))
-
-ggplot(coef_pval_df_interactive_traumatype_death30days_2, 
-       aes(x=term, y=OR, ymin=OR_CI_lower, ymax=OR_CI_upper)) +
-  geom_hline(yintercept=1, colour = "blue", linewidth=0.8, linetype="dotted") +
-  geom_pointrange(alpha=0.7, shape=15) +
-  geom_vline(xintercept=0, linewidth=1.2) +
-  scale_x_discrete(expand = expansion(add = c(1, 0.8))) + 
-  scale_y_continuous(expand = expansion(add = c(0.1, 0.1))) +
-  scale_y_log10(limits = c(0.01, 26)) +
-  coord_flip() +
-  labs(y="Odds Ratio", x=NULL) +
-  ggtitle('Mortality at 30 days. Interaction between PMV and Trauma Types. eICU Database') +
-  theme_minimal() +
-  theme(legend.text = element_text(size = 10), legend.spacing.y = unit(1, "cm"))
-
-# Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/forestplot_pmv_traumatype_30days_eicu.png", width = 6, height = 4, dpi = 300)
-
-```
-
-## TBI and non-TBI groups
-```{r}
-# Conduct separate analyses for TBI and non-TBI groups
-final_dataset_tbi <- subset(final_dataset, tbi_seq1 == 1)
-final_dataset_notbi <- subset(final_dataset, tbi_seq1 == 0)
-
-# Fit logistic regression models in each group
-logreg_death30days_tbi <- glm(death_30days ~ age + prolonged_mec_vent + sapsii, data = final_dataset_tbi, family = binomial)
-logreg_death30days_notbi <- glm(death_30days ~ age + prolonged_mec_vent + sapsii, data = final_dataset_notbi, family = binomial)
-
-# Print the model summaries
-print('Model summary for death at 30 days in the TBI group')
-summary(logreg_death30days_tbi)
-print('Model summary for death at 30 days in the non-TBI group')
-summary(logreg_death30days_notbi)
-
-# Odds Ratio
-coef_pval_df_death30days_tbi <- extract_coef_pval_OR(logreg_death30days_tbi)
-coef_pval_df_death30days_notbi <- extract_coef_pval_OR(logreg_death30days_notbi)
-
-# Write and print table with odds ratio
-write.csv(coef_pval_df_death30days_tbi,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/coef_pval_df_death30days_tbi_eicu.csv')
-htmlTable(coef_pval_df_death30days_tbi[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio of dataset with TBI. eICU Database")
-
-write.csv(coef_pval_df_death30days_notbi,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/coef_pval_df_death30days_notbi_eicu.csv')
-htmlTable(coef_pval_df_death30days_notbi[,c("term","OR","OR_CI_lower","OR_CI_upper")], caption = "Odds Ratio of dataset without TBI. eICU Database")
 ```
 
 # Correlation between TBI and age
 ```{r}
 # Calculate the point-biserial correlation
-correlation_tbi_age <- cor.test(final_dataset$tbi_seq1, final_dataset$age)
+correlation_tbi_age <- cor.test(final_dataset_eICU$tbi_severe_anyseq, final_dataset_eICU$age)
 
 # Print the correlation coefficient and p-value
 cat("Point-biserial correlation coefficient:", correlation_tbi_age$estimate, "\n")
@@ -390,3 +370,4 @@ if (correlation_tbi_age$p.value < 0.05) {
 }
 
 ```
+

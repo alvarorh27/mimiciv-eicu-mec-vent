@@ -102,7 +102,7 @@ or_hospdeath_2 <- or_hospdeath_1 %>%
 
 # Save OR table and print in console
 write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/or_hospdeath_PMV_mimiciv.csv')
-htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database")
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database")
 
 # Export OR table as kable 
 or_table <- or_hospdeath_2 %>%
@@ -111,7 +111,7 @@ or_table <- or_hospdeath_2 %>%
     term = factor(term, levels = variable_order),
     OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
   arrange(desc(term)) %>%
-  kbl(caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database" , align = "c") %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database" , align = "c") %>%
   kable_classic_2(full_width = F, html_font = "Cambria") %>%
   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Odds_ratio/or_hospdeath_PMV_mimiciv.png",
              zoom = 10)
@@ -122,7 +122,7 @@ ggplot(or_hospdeath_2,
   geom_point(size = 2, aes(color = adverse_protective)) +
   geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
   geom_vline(xintercept = 1, linetype = "dashed") +
-  labs(x = "Odds Ratio", y = NULL, title = "Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. MIMIC-IV Database") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. MIMIC-IV Database") +
   theme_minimal() +
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),
@@ -187,7 +187,7 @@ or_hospdeath_2 <- or_hospdeath_1 %>%
 
 # Save OR table and print in console
 write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/or_hospdeath_TBI_mimiciv.csv')
-htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database")
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database")
 
 # Export OR table as kable 
 or_table <- or_hospdeath_2 %>%
@@ -196,7 +196,7 @@ or_table <- or_hospdeath_2 %>%
     term = factor(term, levels = variable_order),
     OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
   arrange(desc(term)) %>%
-  kbl(caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database" , align = "c") %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database" , align = "c") %>%
   kable_classic_2(full_width = F, html_font = "Cambria") %>%
   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Odds_ratio/or_hospdeath_TBI_mimiciv.png",
              zoom = 10)
@@ -207,7 +207,7 @@ ggplot(or_hospdeath_2,
   geom_point(size = 2, aes(color = adverse_protective)) +
   geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
   geom_vline(xintercept = 1, linetype = "dashed") +
-  labs(x = "Odds Ratio", y = NULL, title = "Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. MIMIC-IV Database") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. MIMIC-IV Database") +
   theme_minimal() +
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),
@@ -279,7 +279,7 @@ or_hospdeath_2 <- or_hospdeath_1 %>%
 
 # Save OR table and print in console
 write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/or_hospdeath_PMV-TBI_mimiciv.csv')
-htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database")
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database")
 
 # Export OR table as kable 
 or_table <- or_hospdeath_2 %>%
@@ -288,7 +288,7 @@ or_table <- or_hospdeath_2 %>%
     term = factor(term, levels = variable_order),
     OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
   arrange(desc(term)) %>%
-  kbl(caption = "Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database" , align = "c") %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database" , align = "c") %>%
   kable_classic_2(full_width = F, html_font = "Cambria") %>%
   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Odds_ratio/or_hospdeath_PMV-TBI_mimiciv.png",
              zoom = 10)
@@ -299,7 +299,7 @@ ggplot(or_hospdeath_2,
   geom_point(size = 2, aes(color = adverse_protective)) +
   geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
   geom_vline(xintercept = 1, linetype = "dashed") +
-  labs(x = "Odds Ratio", y = NULL, title = "Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. MIMIC-IV Database") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. MIMIC-IV Database") +
   theme_minimal() +
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),

@@ -196,12 +196,12 @@ charlson_MIMICIV <- run_query(getSQL('sql/charlson_MIMIC-IV.sql'))
 
 ```{r}
 # Join patients tables by subject_id
-dataset_join <- icustays_MIMICIV %>%
+dataset_join_mimiciv <- icustays_MIMICIV %>%
   left_join(patients_MIMICIV, by = "subject_id")
 
 # Join tables by subject_id and hadm_id  
-dataset_join <- Reduce(function(...) merge(..., by = c("subject_id", "hadm_id"), all.x=TRUE, sort = TRUE), list(
-  dataset_join, 
+dataset_join_mimiciv <- Reduce(function(...) merge(..., by = c("subject_id", "hadm_id"), all.x=TRUE, sort = TRUE), list(
+  dataset_join_mimiciv, 
   admissions_MIMICIV, 
   tbi_MIMICIV,
   trauma_general_MIMICIV, 
@@ -213,8 +213,8 @@ dataset_join <- Reduce(function(...) merge(..., by = c("subject_id", "hadm_id"),
   charlson_MIMICIV))
   
 # Join tables by subject_id, hadm_id and stay_id (except first_day_gcs as it doesn't include hadm_id)
-dataset_join <- Reduce(function(...) merge(..., by = c("subject_id","hadm_id", "stay_id"), all.x=TRUE, sort = TRUE), list(
-  dataset_join,
+dataset_join_mimiciv <- Reduce(function(...) merge(..., by = c("subject_id","hadm_id", "stay_id"), all.x=TRUE, sort = TRUE), list(
+  dataset_join_mimiciv,
   vm_consecutive_days_MIMICIV, 
   vm_total_days_MIMICIV,
   vm_and_traq_MIMICIV,
@@ -224,7 +224,7 @@ dataset_join <- Reduce(function(...) merge(..., by = c("subject_id","hadm_id", "
 ))
 
 #Join first_day_gcs table
-dataset_join %<>%
+dataset_join_mimiciv %<>%
   left_join(first_day_gcs_MIMICIV, by = c("subject_id", "stay_id"))
 
 ```
@@ -233,10 +233,10 @@ dataset_join %<>%
 
 ```{r}
 # Convert columns names to lowercase
-names(dataset_join) <- tolower(names(dataset_join))
+names(dataset_join_mimiciv) <- tolower(names(dataset_join_mimiciv))
 
 # Rename columns for self-explanation purposes
-total_dataset <- dataset_join %>%
+total_dataset <- dataset_join_mimiciv %>%
   rename(
     "age" = anchor_age,
     "sex" = gender, 
@@ -350,18 +350,19 @@ total_dataset_clean <- total_dataset %>%
 # Fill the NA in tbi_seq1 and tbi_anyseq to avoid errors in next lines
     tbi_seq1 = ifelse(is.na(tbi_seq1), 0, tbi_seq1),
     tbi_anyseq = ifelse(is.na(tbi_anyseq), 0, tbi_anyseq),
-### All 3 gcs variables are added together to obtain gcs, only when gcs is NA (530 rows, also with gcs_unable missing), whose gcs is filled completely based on mode; and patients with TBI and gcs_unable=1. Rows with gcs_unable=1 and not TBI has to maintain their 15 value. 
+### All 3 gcs variables are added together to obtain gcs, only when gcs is NA (530 rows, also with gcs_unable missing), whose gcs is filled completely based on mode; and patients with TBI and gcs_unable=1. Rows with gcs_unable=1 and not TBI maintain their 15 value. 
     gcs = as.integer(ifelse(is.na(gcs) | (tbi_anyseq==1 & gcs_unable==1), gcs_motor + gcs_verbal + gcs_eyes, gcs)),
-### SOFA: respiration, coagulation, liver, cardiovascular, cns and renal variables are filled with the median, and those 6 are added together to obtain SOFA
-    respiration = ifelse(is.na(respiration), median(respiration, na_rm=TRUE), respiration), 
-    coagulation = ifelse(is.na(coagulation), median(coagulation, na_rm=TRUE), coagulation), 
-    liver = ifelse(is.na(liver), median(liver, na_rm=TRUE), liver), 
-    cardiovascular = ifelse(is.na(cardiovascular), median(cardiovascular, na_rm=TRUE), cardiovascular), 
-    cns = ifelse(is.na(cns), median(cns, na_rm=TRUE), cns), 
-    renal = ifelse(is.na(renal), median(renal, na_rm=TRUE), renal), 
+### SOFA: respiration, coagulation, liver, cardiovascular, cns and renal variables are filled with the mode, and those 6 are added together to obtain SOFA
+    respiration = ifelse(is.na(respiration), modeest::mfv(respiration, na_rm=TRUE), respiration), 
+    coagulation = ifelse(is.na(coagulation), modeest::mfv(coagulation, na_rm=TRUE), coagulation), 
+    liver = ifelse(is.na(liver), modeest::mfv(liver, na_rm=TRUE), liver), 
+    cardiovascular = ifelse(is.na(cardiovascular), modeest::mfv(cardiovascular, na_rm=TRUE), cardiovascular), 
+    cns = ifelse(is.na(cns), modeest::mfv(cns, na_rm=TRUE), cns), 
+    renal = ifelse(is.na(renal), modeest::mfv(renal, na_rm=TRUE), renal), 
     sofa = as.integer(respiration + coagulation + liver + cardiovascular + cns + renal)) %>%
 ##The rest of the NA-containing columns are filled with a '0' value. These include dichotomous variables (inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, mv_total_7days, mv_total_14days, mv_total_21days and prolonged_mec_vent), as well as discontinuous variables related with ventilation (consecutive_vm_days and total_vm_days)
-  mutate_at(vars(inhospital_death:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
+  mutate_at(vars(inhospital_death:charlson), ~ifelse(is.na(.), 0, .)) %>% 
+  mutate_at(vars(gcs:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
 
 ```
 
@@ -481,7 +482,7 @@ final_dataset_hadmid <- group_dataset_1 %>%
   left_join(group_dataset_2, by = c("subject_id","hadm_id"))
 
 # Select subject_id from first hadm_id 
-final_dataset_MIMICIV <- final_dataset_hadmid %>%
+final_dataset_merged <- final_dataset_hadmid %>%
   group_by(subject_id) %>%
   arrange (icu_admittime) %>% 
   filter(row_number() == 1) %>%
@@ -493,21 +494,27 @@ cat(sprintf('%d unique patients in ICU in original MIMIC-IV database.\n', nrow(t
 rows_excluded_hadmid <- nrow(total_dataset_clean)-nrow(group_dataset_1)
 cat(sprintf('\n%d patients with unique hospital id, excluding %d rows.\n', nrow(group_dataset_1), rows_excluded_hadmid))
 
-rows_excluded_subject_id <- nrow(final_dataset_hadmid)-nrow(final_dataset_MIMICIV)
+rows_excluded_subject_id <- nrow(final_dataset_hadmid)-nrow(final_dataset_merged)
 cat(sprintf('%d selected first ICU stay for each individual, excluding %d rows.\n', nrow(final_dataset_MIMICIV), rows_excluded_subject_id))
 
 ```
 
 ## Exclusion criteria
 ```{r}
-# Apply exclusion filters and print rows excluded
+# Save final dataset before exclusion criteria
+write.csv(final_dataset_merged,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV_no-excluded.csv', row.names = F)
 
+# Apply exclusion filters and print rows excluded
+final_dataset_excluded <- final_dataset_merged %>% 
+  filter(!is.na(gcs_original))
+rows_excluded_gcs_mimiciv <- nrow(final_dataset_merged)-nrow(final_dataset_excluded)
+cat(sprintf('%d patients remaining, with %d patients having missing gcs values.\n', nrow(final_dataset_excluded), rows_excluded_gcs_mimiciv))
 
 ```
 
 # Export file
 ```{r}
-write.csv(final_dataset_MIMICIV,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv', row.names = F)
+write.csv(final_dataset_excluded,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv', row.names = F)
 ```
 
 # Load File

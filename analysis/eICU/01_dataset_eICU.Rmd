@@ -31,6 +31,7 @@ library(kableExtra)
 library(ggplot2)
 library(naniar)
 library(modeest)
+library(mice)
 ```
 
 ## BigQuery related functions
@@ -158,7 +159,7 @@ patient_eicu <- run_query(getSQL("sql/patient_eicu.sql"))
 icustays_eicu <- run_query(getSQL("sql/icustays_eicu.sql"))
 ```
 
-## Severity scores
+## Severity scores and comorbidities
 
 ```{r}
 #Table apachepatientresult 
@@ -166,13 +167,16 @@ apachepatientresult_eicu <- run_query(getSQL("sql/apachepatientresult_eicu.sql")
 apachepatientresult_eicu %<>%
   group_by(patientunitstayid) %>%
   arrange(apachepatientresultsid) %>%
-  filter(row_number() == 1)
+  filter(row_number() == 1) #selects first row, there are two rows per stay_id, one with apache version IV and the other with apache version IVa. Severity scores are identical in both
 
 #Table apachepredvar 
 apachepredvar_eicu <- run_query(getSQL("sql/apachepredvar_eicu.sql"))
 
 #Table charlson 
 charlson_eicu <- run_query(getSQL("sql/charlson_eicu.sql"))
+
+#Comorbidities
+comorbidities_eicu <- run_query(getSQL("sql/comorbidities_eicu.sql"))
 ```
 
 # Creation of Final Dataset
@@ -181,20 +185,21 @@ charlson_eicu <- run_query(getSQL("sql/charlson_eicu.sql"))
 
 ```{r}
 # Join tables by patientunitstayid, departing from eICU's patient table
-dataset_join <- Reduce(function(...) merge(..., by = c("patientunitstayid"), all.x=TRUE, sort = TRUE), list(
+dataset_join_eicu <- Reduce(function(...) merge(..., by = c("patientunitstayid"), all.x=TRUE, sort = TRUE), list(
   patient_eicu,
   icustays_eicu, 
   apachepatientresult_eicu, 
   apachepredvar_eicu, 
-  charlson_eicu))
+  charlson_eicu, 
+  comorbidities_eicu))
 
 # Rename patientunitstayid to stay_id
-dataset_join %<>%
+dataset_join_eicu %<>%
   rename("stay_id" = patientunitstayid)
 
 # Join tables by stay_id
-dataset_join <- Reduce(function(...) merge(..., by = c("stay_id"), all.x=TRUE, sort = TRUE), list(
-  dataset_join, 
+dataset_join_eicu <- Reduce(function(...) merge(..., by = c("stay_id"), all.x=TRUE, sort = TRUE), list(
+  dataset_join_eicu, 
   vm_consecutive_days_eicu, 
   vm_total_days_eicu,
   vm_and_traq_eicu, 
@@ -212,10 +217,10 @@ dataset_join <- Reduce(function(...) merge(..., by = c("stay_id"), all.x=TRUE, s
 
 ```{r}
 # Convert columns names to lowercase
-names(dataset_join) <- tolower(names(dataset_join))
+names(dataset_join_eicu) <- tolower(names(dataset_join_eicu))
 
 # Rename columns for self-explanation purposes
-total_dataset <- dataset_join %>%
+total_dataset <- dataset_join_eicu %>%
   rename(
     "subject_id_eicu" = uniquepid.x, #individual code for each patient
     "hadm_id_eicu" = patienthealthsystemstayid.x, #individual code for each hospital admission
@@ -230,7 +235,7 @@ total_dataset <- dataset_join %>%
     "charlson" = final_charlson_score, #comorbidity score charlson from SQL code calculating charlson index manually
     "gcs_verbal" = day1verbal, #from apachepredvar table
     "gcs_motor" = day1motor, #from apachepredvar table
-    "gcs_eyes" = day1eyes #from apachepredvar table
+    "gcs_eyes" = day1eyes, #from apachepredvar table
     )
 
 #Transform variables
@@ -244,12 +249,14 @@ total_dataset %<>%
          inhospital_death = case_when(inhospital_death == "Expired" ~ 1, inhospital_death == "Alive" ~ 0, inhospital_death == "" ~ NA), #Convert Expired to 1, Alive to 0 and null to NA
          inicu_death = case_when(inicu_death == "Expired" ~ 1, inicu_death == "Alive" ~ 0, inicu_death == "" ~ NA), #Convert Expired to 1, Alive to 0 and null to NA
          inhospital_death = ifelse(is.na(inhospital_death) & inicu_death == 1, 1, inhospital_death), #for NA values in inhospital_death variable, fill with 1 when the patient died in ICU, since if the patient died in ICU therefore he died in hospital as well
-         discharge_location = ifelse(is.na(discharge_location) & inhospital_death == 1, "Death", discharge_location) #for NA values in discharge_location variable, fill with "Death" when the patient died in ICU
+         discharge_location = ifelse(inhospital_death == 1, "Death", discharge_location), #for NA values in discharge_location variable, fill with "Death" when the patient died in ICU
+         aps = ifelse(aps == -1, NA, aps), #converts '-1' values to NA, as aps cannot have a negative value
+         apache = ifelse(apache == -1, NA, apache) #converts '-1' values to NA, as apache cannot have a negative value
           )
 
 # Create variable days_of_death and death_30days
 total_dataset %<>%
-  mutate(days_of_death = as.numeric(ifelse(discharge_location == "Death" | is.na(discharge_location), hospital_stay_days, -1)), #if the patient is dead, the hospital length of stay represents the days of death from hospital admission. If the patient is alive, a value of -1 is given  
+  mutate(days_of_death = as.numeric(ifelse(discharge_location == "Death", hospital_stay_days, -1)), #if the patient is dead, the hospital length of stay represents the days of death from hospital admission. If the patient is alive, a value of -1 is given  
          death_30days = ifelse(days_of_death <=30 & days_of_death != -1, 1, 0) #patient death before 30 days from ICU admission
          )
 
@@ -281,7 +288,7 @@ total_dataset %<>%
 ```{r}
 # Select the desired columns and order the result
 total_dataset_selected <- total_dataset %>%
-  select(subject_id_eicu, hadm_id_eicu, stay_id, unitvisitnumber_eicu, age_eicu, sex, hospitaladmitoffset.x, unitdischargeoffset, hospitaldischargeoffset.x, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, aps, apache, charlson, gcs_verbal, gcs_motor, gcs_eyes) %>%
+  select(subject_id_eicu, hadm_id_eicu, stay_id, unitvisitnumber_eicu, age_eicu, sex, hospitaladmitoffset.x, unitdischargeoffset, hospitaldischargeoffset.x, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, aps, apache, charlson, gcs_verbal, gcs_motor, gcs_eyes, metastasis, hiv, liver_cirrhosis, stroke, renal_disease, diabetes_disease, cancer, leukemia_disease, lymphoma_disease, myocardial_infarction, chf, pvd, tia, dementia, copd, ctd, pud, liver_disease) %>%
   rename("subject_id" = subject_id_eicu,
          "hadm_id" = hadm_id_eicu,
          "age" = age_eicu,
@@ -319,12 +326,11 @@ total_dataset_clean <- total_dataset_selected %>%
     across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), ~ifelse(is.na(.), 0, .)), #NA values from dichotomous variables are filled with 0
     across(c(inhospital_death, inicu_death, death_30days:prolonged_mec_vent), as.integer),
     #apsiv and apache variables are omitted since they display a 26% of NA values
-    aps = as.integer(ifelse(is.na(aps), modeest::mfv(aps, na_rm=TRUE), aps)), #NAs are filled with the most frequent value (mode)
-    apache = ifelse(is.na(apache), modeest::mfv(age, na_rm=TRUE), age), #NAs are filled with the most frequent value (mode)
     across(gcs_verbal:gcs_eyes, ~ifelse(. == -1, 1, .)), #convert values equal to -1 to 1, the minimal value for each gcs variable. This could be due in eICU database to various reasons, such as the patient being intubated, sedated, paralyzed or with an eye injury that prevents evaluating their response. In these cases, a value of -1 is assigned to indicate that the data is missing or not applicable.
     gcs_original = as.integer(gcs_verbal + gcs_motor + gcs_eyes), #original gcs value before NA imputation
     across(gcs_verbal:gcs_eyes, ~ifelse(is.na(.), modeest::mfv(., na_rm=TRUE), .)), #fill NA values with the mode
-    gcs = as.integer(gcs_verbal + gcs_motor + gcs_eyes) #total gcs value is the sum of verbal, motor and eyes (minimum: 3, maximum: 15)
+    gcs = as.integer(gcs_verbal + gcs_motor + gcs_eyes), #total gcs value is the sum of verbal, motor and eyes (minimum: 3, maximum: 15)
+    across(metastasis:liver_disease, ~ifelse(is.na(.), 0, .)) #converts NA values to 0
   )
 
 ```
@@ -374,7 +380,7 @@ total_dataset_clean %<>%
 # Convert categorical variables to factor
 total_dataset_clean %<>%
   mutate(sex = as.factor(sex),
-         sex = relevel(sex, ref = "Female"), #change reference level of factor sex variable to "Male"
+         sex = relevel(sex, ref = "Female"), #change reference level of factor sex variable to "Female"
          discharge_location = as.factor(discharge_location), 
          trauma_type_seq1 = as.factor(trauma_type_seq1), 
          trauma_type_seq1 = relevel(trauma_type_seq1, ref = "non_trauma"),
@@ -384,7 +390,7 @@ total_dataset_clean %<>%
 
 # Select and order columns
 total_dataset_clean_selected <- total_dataset_clean %>% 
-  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, consecutive_vm_days:prolonged_mec_vent, aps, apache, charlson, gcs_original, gcs, gcs_verbal, gcs_motor, gcs_eyes) %>%
+  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, consecutive_vm_days:prolonged_mec_vent, aps, apache, charlson, gcs_original, gcs, gcs_verbal, gcs_motor, gcs_eyes, metastasis, hiv, liver_cirrhosis, stroke, renal_disease, diabetes_disease, cancer, leukemia_disease, lymphoma_disease, myocardial_infarction, chf, pvd, tia, dementia, copd, ctd, pud, liver_disease) %>%
   arrange(subject_id, unitvisitnumber)
 ```
 
@@ -438,7 +444,7 @@ group_dataset_2 <- total_dataset_clean_selected %>%
   group_by(subject_id, hadm_id) %>%
   arrange (unitvisitnumber) %>% 
   filter(row_number()==1) %>%
-  select(aps:gcs_eyes) %>%
+  select(aps:liver_disease) %>%
   arrange(subject_id)
 
 #Merging two grouped datasets
@@ -457,31 +463,70 @@ cat(sprintf('%d patients with unique hospital id, excluding %d rows.\n', nrow(gr
 ```{r}
 # Apply exclusion filters and print rows excluded
 
-## Removing under age patients
+## Removing cases with original missing values in Gasglow Coma Scale, as it may introduce bias when calculating severe and non severe traumatic brain injury
 final_dataset_hadmid_excluded1 <- final_dataset_hadmid %>%
+  filter(!is.na(gcs_original))
+rows_excluded_gcs <- nrow(final_dataset_hadmid)-nrow(final_dataset_hadmid_excluded1)
+cat(sprintf('%d patients remaining, with %d patients having missing gcs values.\n', nrow(final_dataset_hadmid_excluded1), rows_excluded_gcs))
+
+## Removing under age patients
+final_dataset_hadmid_excluded2 <- final_dataset_hadmid_excluded1 %>%
   filter(age>=18)
-rows_excluded_age <- nrow(final_dataset_hadmid)-nrow(final_dataset_hadmid_excluded1)
-cat(sprintf('%d patients remaining, with %d patients having <18 years old.\n', nrow(final_dataset_hadmid_excluded1), rows_excluded_age))
+rows_excluded_age <- nrow(final_dataset_hadmid_excluded1)-nrow(final_dataset_hadmid_excluded2)
+cat(sprintf('%d patients remaining, with %d patients having <18 years old.\n', nrow(final_dataset_hadmid_excluded2), rows_excluded_age))
 
 ## Removing negative hospital admission offset
-final_dataset_hadmid_excluded2 <- final_dataset_hadmid_excluded1 %>%
+final_dataset_hadmid_excluded3 <- final_dataset_hadmid_excluded2 %>%
   filter(hospitaladmitoffset<=0) #the value should be negative as it is "number of minutes from unit admit time that the patient was admitted to the hospital", and otherwise it would mean ICU admission happened before hospital admission
-rows_excluded_hospadmit <- nrow(final_dataset_hadmid_excluded1)-nrow(final_dataset_hadmid_excluded2)
-cat(sprintf('%d patients remaining, with %d patients having hospital admission prior to ICU admission.\n', nrow(final_dataset_hadmid_excluded2), rows_excluded_hospadmit))
+rows_excluded_hospadmit <- nrow(final_dataset_hadmid_excluded2)-nrow(final_dataset_hadmid_excluded3)
+cat(sprintf('%d patients remaining, with %d patients having hospital admission prior to ICU admission.\n', nrow(final_dataset_hadmid_excluded3), rows_excluded_hospadmit))
 
 ## Removing negative ICU length of stay
-final_dataset_hadmid_excluded3 <- final_dataset_hadmid_excluded2 %>%
+final_dataset_hadmid_excluded4 <- final_dataset_hadmid_excluded3 %>%
   filter(icu_stay_days>=0) 
-rows_excluded_los <- nrow(final_dataset_hadmid_excluded2)-nrow(final_dataset_hadmid_excluded3)
-cat(sprintf('%d patients remaining, with %d patients having negative ICU length of stay.\n', nrow(final_dataset_hadmid_excluded3), rows_excluded_los))
+rows_excluded_los <- nrow(final_dataset_hadmid_excluded3)-nrow(final_dataset_hadmid_excluded4)
+cat(sprintf('%d patients remaining, with %d patients having negative ICU length of stay.\n', nrow(final_dataset_hadmid_excluded4), rows_excluded_los))
 
 ```
 
+## Final data imputation
+
+```{r}
+# Create new dataset for imputation
+final_dataset_imputed <- final_dataset_hadmid_excluded4
+
+# Variables for imputation
+vars_to_impute <- c("aps", "apache")
+
+# Display a summary of missing values before imputation
+print("Missing values percentage before imputation:")
+na_summary_before <- colMeans(is.na(final_dataset_imputed[, vars_to_impute])) * 100
+print(na_summary_before)
+
+# Configure the imputation process
+imp <- mice(final_dataset_imputed[, vars_to_impute], 
+            method = 'pmm', 
+            m = 5, 
+            exclude = c("subject_id", "hadm_id", "stay_id", "unitvisitnumber", "hospitaladmitoffset", "unitdischargeoffset", "hospitaldischargeoffset", "days_of_death", "death_30days", "gcs_original"),  #excludes variables from the imputation process
+            seed = 123)
+
+# Perform imputations
+var_imputed <- complete(imp)
+
+# Display a summary of missing values after imputation
+print("Missing values percentage after imputation:")
+na_summary_after <- colMeans(is.na(var_imputed)) * 100
+print(na_summary_after)
+
+# Add the imputed columns to final dataset
+final_dataset_imputed[, c("aps", "apache")] <- var_imputed[, c("aps", "apache")]
+
+```
 
 # Export file
 
 ```{r}
-write.csv(final_dataset_hadmid_excluded,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv', row.names = F)
+write.csv(final_dataset_imputed,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv', row.names = F)
 ```
 
 # Load File

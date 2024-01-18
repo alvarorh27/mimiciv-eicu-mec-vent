@@ -58,7 +58,7 @@ final_dataset_MIMICIV <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-v
 ```
 
 
-# Logistic Regression
+# Logistic Regression: Death at 30 days
 
 ## Hospital Mortality: PMV
 
@@ -68,7 +68,7 @@ final_dataset_MIMICIV <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-v
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ age + sex + prolonged_mec_vent + sapsii + charlson,
+   inhospital_death ~ age + sex + prolonged_mec_vent + apsiii + charlson,
   data = final_dataset_MIMICIV,
   family = binomial())
 print(Sys.time())
@@ -151,7 +151,7 @@ ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ age + sex + trauma_type_anyseq + sapsii + charlson,
+   inhospital_death ~ age + sex + trauma_type_anyseq + apsiii + charlson,
   data = final_dataset_MIMICIV,
   family = binomial())
 print(Sys.time())
@@ -229,7 +229,7 @@ ggplot(or_hospdeath_2,
 ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/fp_hospdeath_TBI_mimiciv.png", width = 10, height = 4, dpi = 300)
 ```
 
-# Logistic Regression with interaction
+# Logistic Regression with interaction: Death at 30 days
 
 ## Hospital Mortality: PMV and trauma types
 
@@ -239,7 +239,7 @@ ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + sapsii + charlson,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_MIMICIV,
   family = binomial())
 print(Sys.time())
@@ -321,13 +321,13 @@ ggplot(or_hospdeath_2,
 ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/fp_hospdeath_PMV-TBI_mimiciv.png", width = 10, height = 4, dpi = 300)
 ```
 
-# Interaction of PMV and Trauma types
+# Interaction of PMV and Trauma types: Death at 30 days
 
 ```{r}
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + sapsii + charlson,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_MIMICIV,
   family = binomial())
 print(Sys.time())
@@ -349,7 +349,303 @@ ggplot(final_dataset_MIMICIV, aes(x = prolonged_mec_vent, y = inhospital_death, 
   theme_minimal()
 
 # Save the plot as a PNG file
-ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/interactionplot_PMV-TBI_mimiciv.png", width = 6, height = 4, dpi = 300)
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/interactionplot_PMV-TBI_hospdeath_mimiciv.png", width = 6, height = 4, dpi = 300)
+
+```
+
+# Logistic Regression: Death at year
+
+## Hospital Mortality: PMV
+
+### Fitting the model
+
+```{r}
+print('Logistic Regression of hospital mortality')
+print(Sys.time())
+logreg_deathyear <- glm(
+   death_year ~ age + sex + prolonged_mec_vent + apsiii + charlson,
+  data = final_dataset_MIMICIV,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_deathyear_1 <- extract_coef_pval_OR(logreg_deathyear)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "TBI as any diagnostic order", "Severe TBI as any diagnostics", "Traumatism as any diagnostic order", "Consecutive days with >6 hour ventilation", "PMV > consecutive 7 days", "PMV > consecutive 14 days", "PMV > consecutive 21 days", "MV for 96h + traqueostomy", "PMV - Prolonged Mechanical Ventilation"))
+
+# Assign proper names to OR table
+or_deathyear_2 <- or_deathyear_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "age" ~ "Age (years)",
+                           term == "sexM" ~ "Sex (male)",
+                           term == "prolonged_mec_vent" ~ "PMV - Prolonged Mechanical Ventilation",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_deathyear_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/or_deathyear_PMV_mimiciv.csv')
+htmlTable(or_deathyear_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with death at year. MIMIC-IV Database")
+
+# Export OR table as kable 
+or_table <- or_deathyear_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with death at year. MIMIC-IV Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Odds_ratio/or_deathyear_PMV_mimiciv.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_deathyear_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor factors associated with death at year. MIMIC-IV Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome") +
+  scale_x_continuous(limits = c(0, 5)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/fp_deathyear_PMV_mimiciv.png", width = 10, height = 4, dpi = 300)
+```
+
+## Hospital Mortality: Trauma types
+
+### Fitting the model
+
+```{r}
+print('Logistic Regression of hospital mortality')
+print(Sys.time())
+logreg_deathyear <- glm(
+   death_year ~ age + sex + trauma_type_anyseq + apsiii + charlson,
+  data = final_dataset_MIMICIV,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_deathyear_1 <- extract_coef_pval_OR(logreg_deathyear)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "TBI - non severe", "TBI - severe", "Trauma-not TBI"))
+
+# Assign proper names to OR table
+or_deathyear_2 <- or_deathyear_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "age" ~ "Age (years)",
+                          term == "sexM" ~ "Sex (male)",
+                          term == "trauma_type_anyseqtbi_non_severe" ~ "TBI - non severe",
+                          term == "trauma_type_anyseqtbi_severe" ~ "TBI - severe",
+                          term == "trauma_type_anyseqtrauma_non_tbi" ~ "Trauma-not TBI",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_deathyear_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/or_deathyear_TBI_mimiciv.csv')
+htmlTable(or_deathyear_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with death at year. MIMIC-IV Database")
+
+# Export OR table as kable 
+or_table <- or_deathyear_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with death at year. MIMIC-IV Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Odds_ratio/or_deathyear_TBI_mimiciv.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_deathyear_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor factors associated with death at year. MIMIC-IV Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome") +
+  scale_x_continuous(limits = c(0, 12)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/fp_deathyear_TBI_mimiciv.png", width = 10, height = 4, dpi = 300)
+```
+
+# Logistic Regression with interaction: Death at year
+
+## Hospital Mortality: PMV and trauma types
+
+### Fitting the model
+
+```{r}
+print('Logistic Regression of hospital mortality')
+print(Sys.time())
+logreg_deathyear <- glm(
+   death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  data = final_dataset_MIMICIV,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_deathyear_1 <- extract_coef_pval_OR(logreg_deathyear)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "PMV", "TBI-non severe", "TBI-severe", "Trauma-not TBI", "PMV + TBI-non severe", "PMV + TBI-severe", "PMV + Trauma - no TBI"))
+
+# Assign proper names to OR table
+or_deathyear_2 <- or_deathyear_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "prolonged_mec_vent" ~ "PMV",
+                          term == "trauma_type_anyseqtbi_non_severe" ~ "TBI-non severe",
+                          term == "trauma_type_anyseqtbi_severe" ~ "TBI-severe",
+                          term == "trauma_type_anyseqtrauma_non_tbi" ~ "Trauma-not TBI",
+                          term == "prolonged_mec_vent:trauma_type_anyseqtbi_non_severe" ~ "PMV + TBI-non severe",
+                          term == "prolonged_mec_vent:trauma_type_anyseqtbi_severe" ~ "PMV + TBI-severe",
+                          term == "prolonged_mec_vent:trauma_type_anyseqtrauma_non_tbi" ~ "PMV + Trauma - no TBI",
+                          term == "age" ~ "Age (years)",
+                          term == "sexM" ~ "Sex (male)",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_deathyear_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/or_deathyear_PMV-TBI_mimiciv.csv')
+htmlTable(or_deathyear_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with death at year. MIMIC-IV Database. MIMIC-IV Database")
+
+# Export OR table as kable 
+or_table <- or_deathyear_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with death at year. MIMIC-IV Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Odds_ratio/or_deathyear_PMV-TBI_mimiciv.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_deathyear_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor factors associated with death at year. MIMIC-IV Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome") +
+  scale_x_continuous(limits = c(0, 13)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/fp_deathyear_PMV-TBI_mimiciv.png", width = 10, height = 4, dpi = 300)
+```
+
+# Interaction of PMV and Trauma types: Death at year
+
+```{r}
+print('Logistic Regression of mortality at 1 year')
+print(Sys.time())
+logreg_deathyear <- glm(
+   death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  data = final_dataset_MIMICIV,
+  family = binomial())
+print(Sys.time())
+
+# Print the model summary
+print('Model summary of logistic regression model with interaction term between PMV and trauma type for death at year')
+summary(logreg_deathyear)
+
+# Perform an analysis of variance (ANOVA) to test the significance of the interaction
+anova(logreg_deathyear, test = "Chisq")
+
+print('If the interaction is significant, we can proceed with post-hoc analyses to explore the nature of the interaction')
+
+# Plot the interaction effect
+ggplot(final_dataset_MIMICIV, aes(x = prolonged_mec_vent, y = death_year, color = factor(trauma_type_anyseq))) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+  labs(x = "Prolonged Mechanical Ventilation", y = "Mortality at 1 year", color = "Type of Trauma", title = "Interaction Effect of PMV and Trauma types on Death at year. MIMIC-IV Database") +
+  theme_minimal()
+
+# Save the plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/interactionplot_PMV-TBI_deathyear_mimiciv.png", width = 6, height = 4, dpi = 300)
 
 ```
 

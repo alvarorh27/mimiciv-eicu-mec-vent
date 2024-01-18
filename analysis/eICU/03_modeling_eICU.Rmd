@@ -55,6 +55,7 @@ extract_coef_pval_OR <- function(model) {
 
 ```{r}
 final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv')
+
 ```
 
 
@@ -68,7 +69,7 @@ final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ age + sex + prolonged_mec_vent + aps + charlson,
+   inhospital_death ~ age + sex + prolonged_mec_vent + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
   data = final_dataset_eICU,
   family = binomial())
 print(Sys.time())
@@ -82,7 +83,7 @@ or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
 
 # Order variables
 variable_order <- rev(c(
-  "Intercept", "Age (years)", "Sex (male)", "TBI as any diagnostic order", "Severe TBI as any diagnostics", "Traumatism as any diagnostic order", "Consecutive days with >6 hour ventilation", "PMV > consecutive 7 days", "PMV > consecutive 14 days", "PMV > consecutive 21 days", "MV for 96h + traqueostomy", "PMV - Prolonged Mechanical Ventilation"))
+  "Intercept", "Age (years)", "Sex (male)", "PMV - Prolonged Mechanical Ventilation"))
 
 # Assign proper names to OR table
 or_hospdeath_2 <- or_hospdeath_1 %>% 
@@ -95,8 +96,8 @@ or_hospdeath_2 <- or_hospdeath_1 %>%
          adverse_protective = case_when(
            OR_lower > 1 & OR_upper > 1 ~ "Adverse",
            OR_lower < 1 & OR_upper < 1 ~ "Protective",
-           TRUE ~ "Inconclusive"
-    ),
+           OR_lower <= 1 & OR_upper >= 1 ~ "Inconclusive"
+           ),
     adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
   filter(term != "Intercept")
 
@@ -113,9 +114,11 @@ or_table <- or_hospdeath_2 %>%
   arrange(desc(term)) %>%
   kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database" , align = "c") %>%
   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV_eicu.png",
-             zoom = 10)
- 
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV_eicu.png", zoom = 10)
+
+# Create a data frame with all possible levels for adverse-protective-inconclusive variable
+adverse_protective_levels <- data.frame(adverse_protective = c("Adverse", "Protective", "Inconclusive"))
+
 # Build the Forest plot
 ggplot(or_hospdeath_2, 
        aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
@@ -127,8 +130,9 @@ ggplot(or_hospdeath_2,
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),
     labels = c("Adverse", "Protective", "Inconclusive"),
-    name = "Effect on Outcome") +
-  scale_x_continuous(limits = c(0, 5)) +
+    name = "Effect on Outcome",
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale,
+  scale_x_continuous(limits = c(0.5, 2)) +
   theme(
     plot.background = element_rect(fill = "white"),
     panel.grid.major.y = element_blank(),
@@ -151,7 +155,7 @@ ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plo
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ age + sex + trauma_type_anyseq + aps + charlson,
+   inhospital_death ~ age + sex + trauma_type_anyseq + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
   data = final_dataset_eICU,
   family = binomial())
 print(Sys.time())
@@ -239,7 +243,7 @@ ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plo
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
   data = final_dataset_eICU,
   family = binomial())
 print(Sys.time())
@@ -327,7 +331,7 @@ ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plo
 print('Logistic Regression of hospital mortality')
 print(Sys.time())
 logreg_hospdeath <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
   data = final_dataset_eICU,
   family = binomial())
 print(Sys.time())

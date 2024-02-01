@@ -94,6 +94,18 @@ vm_total_days_MIMICIV <- run_query(getSQL("sql/vm_total_days_MIMIC-IV.sql"))
 
 # Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
 vm_and_traq_MIMICIV <- run_query(getSQL("sql/vm_and_traq_MIMIC-IV.sql"))
+
+# All episodes of invasive mechanical ventilation, grouped by stay_id cases
+all_imv_MIMICIV <- run_query(getSQL("sql/all_imv_MIMIC-IV.sql")) %>% 
+  select(-ventilation_status) %>% 
+  group_by(stay_id) %>% 
+  arrange(starttime) %>% 
+  summarize(
+    starttime=min(starttime), 
+    endtime=max(endtime)
+  ) %>% 
+  rename("first_vent_starttime" = starttime, 
+         "last_vent_endtime" = endtime)
 ```
 
 ## Traumatisms
@@ -223,6 +235,10 @@ dataset_join_mimiciv <- Reduce(function(...) merge(..., by = c("subject_id","had
   first_day_sofa_MIMICIV
 ))
 
+# Join all_imv_MIMICIV table by stay_id
+dataset_join_mimiciv %<>%
+  left_join(all_imv_MIMICIV, by = "stay_id")
+
 #Join first_day_gcs table
 dataset_join_mimiciv %<>%
   left_join(first_day_gcs_MIMICIV, by = c("subject_id", "stay_id"))
@@ -308,7 +324,7 @@ total_dataset %<>%
 ```{r}
 # Select the desired columns and order the result
 total_dataset %<>% 
-  select(subject_id, hadm_id, stay_id, age, sex, icu_admittime, hospital_stay_days, icu_stay_days, discharge_location, date_of_death, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, charlson, gcs_original, gcs, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
+  select(subject_id, hadm_id, stay_id, age, sex, icu_admittime, icu_outtime, hospital_stay_days, icu_stay_days, discharge_location, date_of_death, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, first_vent_starttime, last_vent_endtime, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, charlson, gcs_original, gcs, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
   arrange(subject_id, icu_admittime)
 
 ```
@@ -361,8 +377,9 @@ total_dataset_clean <- total_dataset %>%
     renal = ifelse(is.na(renal), modeest::mfv(renal, na_rm=TRUE), renal), 
     sofa = as.integer(respiration + coagulation + liver + cardiovascular + cns + renal)) %>%
 ##The rest of the NA-containing columns are filled with a '0' value. These include dichotomous variables (inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, mv_total_7days, mv_total_14days, mv_total_21days and prolonged_mec_vent), as well as discontinuous variables related with ventilation (consecutive_vm_days and total_vm_days)
-  mutate_at(vars(inhospital_death:charlson), ~ifelse(is.na(.), 0, .)) %>% 
-  mutate_at(vars(gcs:ncol(total_dataset)), ~ifelse(is.na(.), 0, .))
+  mutate_at(vars(inhospital_death:anytrauma_anyseq, consecutive_vm_days:charlson), ~ifelse(is.na(.), 0, .)) %>% 
+  mutate_at(vars(gcs:ncol(total_dataset)), ~ifelse(is.na(.), 0, .)) %>% 
+  mutate(exit_with_mv = if_else(icu_outtime==last_vent_endtime & discharge_location!="DIED", 1, 0, missing=0)) #when the end of ventilation matches the icu discharge time and the patient doesn't die within the hospital stay, exit_with_mv is set equal to 1
 
 ```
 
@@ -421,7 +438,7 @@ total_dataset_clean %<>%
 
 # Select and order columns
 total_dataset_clean %<>% 
-  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, consecutive_vm_days:renal) %>%
+  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, first_vent_starttime, last_vent_endtime, exit_with_mv, consecutive_vm_days:renal) %>%
   arrange(subject_id, icu_admittime)
 ```
 
@@ -438,6 +455,7 @@ group_dataset_1 <- total_dataset_clean %>%
     age=min(age), 
     sex=first(sex), 
     icu_admittime=min(icu_admittime), 
+    icu_outtime=max(icu_outtime), 
     hospital_stay_days=first(hospital_stay_days),
     icu_stay_days=sum(icu_stay_days), 
     discharge_location=last(discharge_location),
@@ -456,6 +474,9 @@ group_dataset_1 <- total_dataset_clean %>%
     tbi_severe_anyseq=first(tbi_severe_anyseq), 
     tbi_nonsevere_anyseq=first(tbi_nonsevere_anyseq),
     trauma_type_anyseq=first(trauma_type_anyseq),
+    first_vent_starttime=min(first_vent_starttime), 
+    last_vent_endtime=min(last_vent_endtime),
+    exit_with_mv=max(exit_with_mv),
     consecutive_vm_days=max(consecutive_vm_days), 
     mv_consecutive_7days=max(mv_consecutive_7days), 
     mv_consecutive_14days=max(mv_consecutive_14days),
@@ -495,7 +516,7 @@ rows_excluded_hadmid <- nrow(total_dataset_clean)-nrow(group_dataset_1)
 cat(sprintf('\n%d patients with unique hospital id, excluding %d rows.\n', nrow(group_dataset_1), rows_excluded_hadmid))
 
 rows_excluded_subject_id <- nrow(final_dataset_hadmid)-nrow(final_dataset_merged)
-cat(sprintf('%d selected first ICU stay for each individual, excluding %d rows.\n', nrow(final_dataset_MIMICIV), rows_excluded_subject_id))
+cat(sprintf('%d selected first ICU stay for each individual, excluding %d rows.\n', nrow(final_dataset_merged), rows_excluded_subject_id))
 
 ```
 

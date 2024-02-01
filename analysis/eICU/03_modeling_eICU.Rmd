@@ -131,7 +131,7 @@ ggplot(or_hospdeath_2,
     values = c("#c0392b", "#27ae60", "gray70"),
     labels = c("Adverse", "Protective", "Inconclusive"),
     name = "Effect on Outcome",
-    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale,
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
   scale_x_continuous(limits = c(0.5, 2)) +
   theme(
     plot.background = element_rect(fill = "white"),
@@ -323,6 +323,360 @@ ggplot(or_hospdeath_2,
 
 # Save the Forest plot as a PNG file
 ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_PMV-TBI_eicu.png", width = 10, height = 4, dpi = 300)
+```
+
+# 4 Logistic Regression with interaction: each trauma type
+
+## Hospital Mortality: PMV and TBI-severe
+
+### Fitting the model
+
+```{r}
+# Create subset with tbi_severe
+final_dataset_eICU_tbi_severe <- subset(final_dataset_eICU, final_dataset_eICU$trauma_type_anyseq=="tbi_severe") 
+
+print('Logistic Regression of year mortality')
+print(Sys.time())
+logreg_hospdeath <- glm(
+   inhospital_death ~ age + sex + prolonged_mec_vent + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   data = final_dataset_eICU_tbi_severe,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "PMV"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "prolonged_mec_vent" ~ "PMV",
+                          term == "age" ~ "Age (years)",
+                          term == "sexMale" ~ "Sex (male)",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/or_hospdeath_PMV-for-TBI-severe_eicu.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of TBI severe. eICU Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of TBI severe. eICU Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV-for-TBI-severe_eicu.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor factors associated with hospital mortality.\nSubset of TBI severe. eICU Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome",
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
+  scale_x_continuous(limits = c(0, 13)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_PMV-for-TBI-severe_eicu.png", width = 10, height = 4, dpi = 300)
+```
+
+## Hospital Mortality: PMV and TBI-non severe
+
+### Fitting the model
+
+```{r}
+# Create subset with tbi_severe
+final_dataset_eICU_tbi_nonsevere <- subset(final_dataset_eICU, final_dataset_eICU$trauma_type_anyseq=="tbi_non_severe") 
+
+print('Logistic Regression of year mortality')
+print(Sys.time())
+logreg_hospdeath <- glm(
+   inhospital_death ~ age + sex + prolonged_mec_vent + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+  data = final_dataset_eICU_tbi_nonsevere,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "PMV"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "prolonged_mec_vent" ~ "PMV",
+                          term == "age" ~ "Age (years)",
+                          term == "sexMale" ~ "Sex (male)",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/or_hospdeath_PMV-for-TBI-nonsevere_eicu.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of TBI non-severe. eICU Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of TBI non-severe. eICU Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV-for-TBI-nonsevere_eicu.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor factors associated with hospital mortality.\nSubset of TBI non-severe. eICU Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome", 
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
+  scale_x_continuous(limits = c(0, 13)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_PMV-for-TBI-nonsevere_eicu.png", width = 10, height = 4, dpi = 300)
+```
+
+## Hospital Mortality:: PMV and Trauma not-TBI
+
+### Fitting the model
+
+```{r}
+# Create subset with tbi_severe
+final_dataset_eICU_trauma_not_tbi <- subset(final_dataset_eICU, final_dataset_eICU$trauma_type_anyseq=="trauma_non_tbi") 
+
+print('Logistic Regression of year mortality')
+print(Sys.time())
+logreg_hospdeath <- glm(
+   inhospital_death ~ age + sex + prolonged_mec_vent + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+  data = final_dataset_eICU_trauma_not_tbi,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "PMV"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "prolonged_mec_vent" ~ "PMV",
+                          term == "age" ~ "Age (years)",
+                          term == "sexMale" ~ "Sex (male)",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/or_hospdeath_PMV-for-Trauma-not-TBI_eicu.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of Trauma not TBI. eICU Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of Trauma not TBI. eICU Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV-for-Trauma-not-TBI_eicu.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor factors associated with hospital mortality.\nSubset of Trauma not TBI. eICU Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome", 
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
+  scale_x_continuous(limits = c(0, 13)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_PMV-for-Trauma-not-TBI_eicu.png", width = 10, height = 4, dpi = 300)
+```
+
+## Hospital Mortality: PMV and non Trauma
+
+### Fitting the model
+
+```{r}
+# Create subset with tbi_severe
+final_dataset_eICU_non_trauma <- subset(final_dataset_eICU, final_dataset_eICU$trauma_type_anyseq=="non_trauma") 
+
+print('Logistic Regression of year mortality')
+print(Sys.time())
+logreg_hospdeath <- glm(
+   inhospital_death ~ age + sex + prolonged_mec_vent + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+  data = final_dataset_eICU_non_trauma,
+  family = binomial())
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "PMV"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "prolonged_mec_vent" ~ "PMV",
+                          term == "age" ~ "Age (years)",
+                          term == "sexMale" ~ "Sex (male)",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/or_hospdeath_PMV-for-non-Trauma_eicu.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of not Trauma. eICU Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for factors associated with hospital mortality. Subset of not Trauma. eICU Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Odds_ratio/or_hospdeath_PMV-for-non-Trauma_eicu.png",
+             zoom = 10)
+ 
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor factors associated with hospital mortality.\nSubset of not Trauma. eICU Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome", 
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
+  scale_x_continuous(limits = c(0, 13)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Forest_plot/fp_hospdeath_PMV-for-non-Trauma_eicu.png", width = 10, height = 4, dpi = 300)
 ```
 
 # Interaction of PMV and Trauma types

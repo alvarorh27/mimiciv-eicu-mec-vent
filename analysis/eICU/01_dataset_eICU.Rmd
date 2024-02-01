@@ -96,6 +96,9 @@ vm_total_days_eicu <- run_query(getSQL("sql/vm_total_days_eicu.sql"))
 # Criterion of prolonged mechanical ventilation: 96 hour ventilation + tracheotomy
 vm_and_traq_eicu <- run_query(getSQL("sql/vm_and_traq_eicu.sql"))
 
+# All ventilation episodes. This query is needed at the grouping stage of this file, to add final ventilation times (prolonged or not) to each ICU stay 
+all_episodes_ventilation_eicu <- run_query(getSQL("sql/all_episodes_ventilation_eicu.sql"))
+
 ```
 
 ## Traumatisms
@@ -251,7 +254,7 @@ total_dataset %<>%
          inhospital_death = ifelse(is.na(inhospital_death) & inicu_death == 1, 1, inhospital_death), #for NA values in inhospital_death variable, fill with 1 when the patient died in ICU, since if the patient died in ICU therefore he died in hospital as well
          discharge_location = ifelse(inhospital_death == 1, "Death", discharge_location), #for NA values in discharge_location variable, fill with "Death" when the patient died in ICU
          aps = ifelse(aps == -1, NA, aps), #converts '-1' values to NA, as aps cannot have a negative value
-         apache = ifelse(apache == -1, NA, apache) #converts '-1' values to NA, as apache cannot have a negative value
+         apache = ifelse(apache == -1, NA, apache),  #converts '-1' values to NA, as apache cannot have a negative value
           )
 
 # Create variable days_of_death and death_30days
@@ -288,7 +291,7 @@ total_dataset %<>%
 ```{r}
 # Select the desired columns and order the result
 total_dataset_selected <- total_dataset %>%
-  select(subject_id_eicu, hadm_id_eicu, stay_id, unitvisitnumber_eicu, age_eicu, sex, hospitaladmitoffset.x, unitdischargeoffset, hospitaldischargeoffset.x, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, aps, apache, charlson, gcs_verbal, gcs_motor, gcs_eyes, metastasis, hiv, liver_cirrhosis, stroke, renal_disease, diabetes_disease, cancer, leukemia_disease, lymphoma_disease, myocardial_infarction, chf, pvd, tia, dementia, copd, ctd, pud, liver_disease) %>%
+  select(subject_id_eicu, hadm_id_eicu, stay_id, unitvisitnumber_eicu, age_eicu, sex, hospitaladmitoffset.x, unitdischargeoffset, hospitaldischargeoffset.x, hospital_stay_days, icu_stay_days, discharge_location, inhospital_death, inicu_death, days_of_death, death_30days, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, oobintubday1, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, aps, apache, charlson, gcs_verbal, gcs_motor, gcs_eyes, metastasis, hiv, liver_cirrhosis, stroke, renal_disease, diabetes_disease, cancer, leukemia_disease, lymphoma_disease, myocardial_infarction, chf, pvd, tia, dementia, copd, ctd, pud, liver_disease) %>%
   rename("subject_id" = subject_id_eicu,
          "hadm_id" = hadm_id_eicu,
          "age" = age_eicu,
@@ -328,6 +331,7 @@ total_dataset_clean <- total_dataset_selected %>%
     #apsiv and apache variables are omitted since they display a 26% of NA values
     across(gcs_verbal:gcs_eyes, ~ifelse(. == -1, 1, .)), #convert values equal to -1 to 1, the minimal value for each gcs variable. This could be due in eICU database to various reasons, such as the patient being intubated, sedated, paralyzed or with an eye injury that prevents evaluating their response. In these cases, a value of -1 is assigned to indicate that the data is missing or not applicable.
     gcs_original = as.integer(gcs_verbal + gcs_motor + gcs_eyes), #original gcs value before NA imputation
+    gcs_verbal=ifelse(tbi_anyseq==1 & oobintubday1==1, 1, gcs_verbal), #gcs_verbal is set to 1 when the patient has traumatic brain injury and is intubated (invasive mechanical ventilation) the first day os ICU admission. oobintubday1 is a variable within eICU's apachePredVar table, which indicates if a patient was intubated at anytime for the apache day
     across(gcs_verbal:gcs_eyes, ~ifelse(is.na(.), modeest::mfv(., na_rm=TRUE), .)), #fill NA values with the mode
     gcs = as.integer(gcs_verbal + gcs_motor + gcs_eyes), #total gcs value is the sum of verbal, motor and eyes (minimum: 3, maximum: 15)
     across(metastasis:liver_disease, ~ifelse(is.na(.), 0, .)) #converts NA values to 0
@@ -335,7 +339,7 @@ total_dataset_clean <- total_dataset_selected %>%
 
 ```
 
-## Confirm 0% missingness
+## Confirm missingness
 ```{r}
 # Map missingness in total_dataset_clean after NA filling  
 ##Columns with na values
@@ -349,6 +353,8 @@ n_var_miss(total_dataset_clean)
 miss_summary_postclean <- miss_var_summary(total_dataset_clean)
 miss_summary_postclean
 gg_miss_var(total_dataset_clean, show_pct=TRUE)
+
+# There are a few variables with NA values that have not been imputed. These are aps and apache (imputed in later step) and gcs_original, which mantaines the original gcs values. The mode-imputed gcs variable has been done previously, although missing values in gcs_original have been excluded at the end of this code. 
   
 ```
 
@@ -386,7 +392,6 @@ total_dataset_clean %<>%
          trauma_type_seq1 = relevel(trauma_type_seq1, ref = "non_trauma"),
          trauma_type_anyseq = as.factor(trauma_type_anyseq), 
          trauma_type_anyseq = relevel(trauma_type_anyseq, ref = "non_trauma"))
-
 
 # Select and order columns
 total_dataset_clean_selected <- total_dataset_clean %>% 
@@ -439,8 +444,28 @@ group_dataset_1 <- total_dataset_clean_selected %>%
           ) %>%
     arrange(subject_id)
 
+# Add final ventilation times to each stay_id to see if the patient exits the ICU with ventilation
+# Variable exit_with_mv depends on how it is calculated in the eICU's table SQL query code, so it may contain error
+all_episodes_ventilation_eicu_grouped <- all_episodes_ventilation_eicu %>% 
+  group_by(subject_id, hadm_id) %>%
+  arrange (unitvisitnumber) %>% 
+  summarize(
+    icu_admit_time=first(icu_admit_time), 
+    icu_outtime=last(icu_outtime), 
+    starttime=min(starttime), 
+    endtime=max(endtime)) %>% 
+  ungroup() %>% 
+  rename("vent_starttime" = starttime, 
+         "vent_endtime" = endtime) %>% 
+  mutate(exit_with_mv = ifelse(icu_outtime == vent_endtime, 1, 0)) %>% #when the end of ventilation matches the icu discharge time, exit_with_mv is set equal to 1
+  select(hadm_id, exit_with_mv)
+
+group_dataset_2 <- group_dataset_1 %>% 
+  left_join(all_episodes_ventilation_eicu_grouped, by="hadm_id") %>% 
+  mutate(exit_with_mv = if_else(exit_with_mv == 1 & discharge_location != "Death", 1, 0, missing = 0)) #if the patient is not dead, we can consider that the patient left the ICU with invasive mechanical 
+
 #Select severity and comorbidity scores related to first ICU stay for each hospital admission   
-group_dataset_2 <- total_dataset_clean_selected %>%
+group_dataset_3 <- total_dataset_clean_selected %>%
   group_by(subject_id, hadm_id) %>%
   arrange (unitvisitnumber) %>% 
   filter(row_number()==1) %>%
@@ -448,8 +473,8 @@ group_dataset_2 <- total_dataset_clean_selected %>%
   arrange(subject_id)
 
 #Merging two grouped datasets
-final_dataset_hadmid <- group_dataset_1 %>%
-  left_join(group_dataset_2, by = c("subject_id","hadm_id"))
+final_dataset_hadmid <- group_dataset_2 %>%
+  left_join(group_dataset_3, by = c("subject_id","hadm_id"))
 
 #Print flowchart grouping criteria
 cat(sprintf('%d unique patients in ICU in original eICU database.\n', nrow(total_dataset_clean_selected)))
@@ -492,6 +517,8 @@ cat(sprintf('%d patients remaining, with %d patients having negative ICU length 
 ## Final data imputation
 
 ```{r}
+# aps and apache variables are imputed using the mice package as they display 26% of NA (before grouping for obtaining final dataset)
+
 # Create new dataset for imputation
 final_dataset_imputed <- final_dataset_hadmid_excluded4
 
@@ -507,7 +534,7 @@ print(na_summary_before)
 imp <- mice(final_dataset_imputed[, vars_to_impute], 
             method = 'pmm', 
             m = 5, 
-            exclude = c("subject_id", "hadm_id", "stay_id", "unitvisitnumber", "hospitaladmitoffset", "unitdischargeoffset", "hospitaldischargeoffset", "days_of_death", "death_30days", "gcs_original"),  #excludes variables from the imputation process
+            exclude = c("subject_id", "hadm_id", "stay_id", "unitvisitnumber", "hospitaladmitoffset", "unitdischargeoffset", "hospitaldischargeoffset", "days_of_death", "death_30days", "gcs_original", "exit_with_mv"),  #excludes variables from the imputation process
             seed = 123)
 
 # Perform imputations
@@ -520,6 +547,25 @@ print(na_summary_after)
 
 # Add the imputed columns to final dataset
 final_dataset_imputed[, c("aps", "apache")] <- var_imputed[, c("aps", "apache")]
+final_dataset_imputed <- as.data.frame(final_dataset_imputed)
+
+```
+
+## Address missingness in final dataset
+```{r}
+# Map missingness in total_dataset_clean after NA filling
+
+## Columns with NA values
+print('Columns in final_dataset_imputed having NAs')
+names(final_dataset_imputed)[colSums(is.na(final_dataset_imputed)) > 0]
+
+print('Nº of columns with na values')
+n_var_miss(final_dataset_imputed)
+
+## Plot columns and show descriptive table with NA values
+miss_summary_final <- miss_var_summary(final_dataset_imputed)
+miss_summary_final
+gg_miss_var(final_dataset_imputed, show_pct=TRUE)
 
 ```
 

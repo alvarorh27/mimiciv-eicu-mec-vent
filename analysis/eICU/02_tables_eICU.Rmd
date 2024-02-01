@@ -25,7 +25,7 @@ final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'apache', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_eICU[,vars_in_table1]
@@ -72,7 +72,7 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'apache', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_eICU[,vars_in_table1]
@@ -119,7 +119,7 @@ table1_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'apache', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_eICU[,vars_in_table1]
@@ -167,7 +167,7 @@ table1_hospdeath<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyb
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'apache', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
 table1_dataset <- final_dataset_eICU[,vars_in_table1]

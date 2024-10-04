@@ -1,0 +1,152 @@
+---
+title: "03_modeling_GAM"
+author: "Álvaro Ritoré"
+date: "2024-05-30"
+output: html_document
+---
+
+# Environment
+
+```{r}
+library(skimr)
+library(mgcv)
+library(parallel)
+library(parglm)
+library(pROC)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(feather)
+library(broom)
+library(htmlTable)
+library(randomForest)
+library(caret)
+library(kableExtra)
+library(gridExtra)
+
+extract_coef_pval_OR <- function(model) {
+  
+  as.data.frame(tibble(term = names(model$coefficients),
+                       estimate = model$coefficients,
+                       std.error = sqrt(diag(vcov(model))),
+                       statistic = model$coefficients / sqrt(diag(vcov(model))),
+                       p.value = 2 * (1 - pnorm(abs(statistic))),
+                       OR = round(exp(estimate),2),
+                       OR_lower = round(exp(estimate - 1.96 * std.error),2),
+                       OR_upper = round(exp(estimate + 1.96 * std.error),2)
+  )
+  )
+} 
+```
+
+# Load File
+
+```{r}
+final_dataset_MIMICIV <- readRDS("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.rds")
+```
+
+
+# Logistic Regression: Death at 30 days
+
+## Hospital Mortality: PMV
+
+### Fitting the model
+
+```{r}
+print('GAM smoothed by age on hospital mortality')
+print(Sys.time())
+
+linear_model <- gam(
+   inhospital_death ~ age + sex + prolonged_mec_vent + apsiii + charlson,
+  data = final_dataset_MIMICIV,
+  family = binomial())
+
+gam_model <- gam(
+   inhospital_death ~ s(age, k=3) + sex + prolonged_mec_vent + apsiii + charlson,
+  data = final_dataset_MIMICIV,
+  family = binomial())
+
+anova(linear_model, gam_model, test = "Chisq")
+
+print(gam_model)
+plot(gam_model, rug = TRUE, shade = TRUE, shade.col = "lightblue")
+
+plot(gam_model, seWithMean = TRUE,shift = coef(gam_model)[1], rug = TRUE, shade = TRUE, shade.col = "lightblue")
+
+
+print(Sys.time())
+```
+
+### Odds ratio and Forest plot
+
+```{r}
+# Extract Odds ratio
+or_hospdeath_1 <- extract_coef_pval_OR(logreg_hospdeath)
+
+# Order variables
+variable_order <- rev(c(
+  "Intercept", "Age (years)", "Sex (male)", "TBI as any diagnostic order", "Severe TBI as any diagnostics", "Traumatism as any diagnostic order", "Consecutive days with >6 hour ventilation", "PMV > consecutive 7 days", "PMV > consecutive 14 days", "PMV > consecutive 21 days", "MV for 96h + traqueostomy", "PMV - Prolonged Mechanical Ventilation"))
+
+# Assign proper names to OR table
+or_hospdeath_2 <- or_hospdeath_1 %>% 
+  mutate(term = case_when(term == "(Intercept)" ~ "Intercept",
+                          term == "age" ~ "Age (years)",
+                           term == "sexM" ~ "Sex (male)",
+                           term == "prolonged_mec_vent" ~ "PMV - Prolonged Mechanical Ventilation",
+                          TRUE ~ term), 
+         term = factor(term, levels = variable_order),
+         adverse_protective = case_when(
+           OR_lower > 1 & OR_upper > 1 ~ "Adverse",
+           OR_lower < 1 & OR_upper < 1 ~ "Protective",
+           TRUE ~ "Inconclusive"
+    ),
+    adverse_protective = factor(adverse_protective, levels = c("Adverse", "Protective", "Inconclusive"))) %>%
+  filter(term != "Intercept")
+
+# Save OR table and print in console
+write.csv(or_hospdeath_2,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/or_hospdeath_PMV_mimiciv.csv')
+htmlTable(or_hospdeath_2[,c("term","OR","OR_lower","OR_upper")], caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database")
+
+# Export OR table as kable 
+or_table <- or_hospdeath_2 %>%
+  select(term, OR, OR_lower, OR_upper) %>%
+  mutate(
+    term = factor(term, levels = variable_order),
+    OR_upper = ifelse(OR_upper <= 100, sprintf("%.2f", OR_upper), sprintf("%.2e", OR_upper))) %>%
+  arrange(desc(term)) %>%
+  kbl(caption = "Logistic Regression. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database" , align = "c") %>%
+  kable_classic_2(full_width = F, html_font = "Cambria") %>%
+  save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Odds_ratio/or_hospdeath_PMV_mimiciv.png",
+             zoom = 10)
+
+# Create a data frame with all possible levels for adverse-protective-inconclusive variable
+adverse_protective_levels <- data.frame(adverse_protective = c("Adverse", "Protective", "Inconclusive"))
+
+# Build the Forest plot
+ggplot(or_hospdeath_2, 
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "Logistic Regression. Odds Ratio and Confidence Intervals\nfor Hospital Mortality-associated Factors. MIMIC-IV Database") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Adverse", "Protective", "Inconclusive"),
+    name = "Effect on Outcome", 
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
+  scale_x_continuous(limits = c(0, 5)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+
+# Save the Forest plot as a PNG file
+ggsave("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/mimic-iv/Forest_plot/fp_hospdeath_PMV_mimiciv.png", width = 10, height = 4, dpi = 300)
+```

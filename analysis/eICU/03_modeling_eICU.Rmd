@@ -54,8 +54,7 @@ extract_coef_pval_OR <- function(model) {
 # Load File
 
 ```{r}
-final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv')
-
+final_dataset_eICU <- readRDS('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.rds')
 ```
 
 

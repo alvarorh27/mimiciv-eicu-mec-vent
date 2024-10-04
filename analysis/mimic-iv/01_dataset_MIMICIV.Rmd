@@ -100,7 +100,7 @@ all_imv_MIMICIV <- run_query(getSQL("sql/all_imv_MIMIC-IV.sql")) %>%
   select(-ventilation_status) %>% 
   group_by(stay_id) %>% 
   arrange(starttime) %>% 
-  summarize(
+  dplyr::summarize(
     starttime=min(starttime), 
     endtime=max(endtime)
   ) %>% 
@@ -115,7 +115,7 @@ all_imv_MIMICIV <- run_query(getSQL("sql/all_imv_MIMIC-IV.sql")) %>%
 tbi_MIMICIV <- run_query(getSQL("sql/tbi_MIMIC-IV.sql"))
 tbi_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
-  summarize(
+  dplyr::summarize(
     tbi_seq1=max(tbi_seq_1), 
     tbi_anyseq=max(tbi_any_seq))
 
@@ -123,7 +123,7 @@ tbi_MIMICIV %<>%
 trauma_general_MIMICIV <- run_query(getSQL("sql/trauma_general_MIMIC-IV.sql"))
 trauma_general_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
-  summarize(
+  dplyr::summarize(
     traumatic_general_seq_1=max(traumatic_general_seq_1), 
     traumatic_general_any_seq=max(traumatic_general_any_seq))
 
@@ -131,7 +131,7 @@ trauma_general_MIMICIV %<>%
 trauma_fractures_MIMICIV <- run_query(getSQL("sql/trauma_fractures_MIMIC-IV.sql"))
 trauma_fractures_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
-  summarize(
+  dplyr::summarize(
     fractures_seq_1=max(fractures_seq_1),
     fractures_any_seq=max(fractures_any_seq))
 
@@ -139,7 +139,7 @@ trauma_fractures_MIMICIV %<>%
 trauma_luxations_MIMICIV <- run_query(getSQL("sql/trauma_luxations_MIMIC-IV.sql"))
 trauma_luxations_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
-  summarize(
+  dplyr::summarize(
     luxation_seq_1=max(luxation_seq_1),
     luxation_any_seq=max(luxation_any_seq))
 
@@ -147,7 +147,7 @@ trauma_luxations_MIMICIV %<>%
 trauma_sprains_MIMICIV <- run_query(getSQL("sql/trauma_sprains_MIMIC-IV.sql"))
 trauma_sprains_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
-  summarize(
+  dplyr::summarize(
     sprain_seq_1=max(sprain_seq_1),
     sprain_any_seq=max(sprain_any_seq))
 
@@ -155,7 +155,7 @@ trauma_sprains_MIMICIV %<>%
 trauma_burns_MIMICIV <- run_query(getSQL("sql/trauma_burns_MIMIC-IV.sql"))
 trauma_burns_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
-  summarize(
+  dplyr::summarize(
     burns_seq_1=max(burns_seq_1),
     burns_any_seq=max(burns_any_seq))
 
@@ -163,7 +163,7 @@ trauma_burns_MIMICIV %<>%
 trauma_contusion_MIMICIV <- run_query(getSQL("sql/trauma_contusions_MIMIC-IV.sql"))
 trauma_contusion_MIMICIV %<>%
   group_by(subject_id, hadm_id) %>%
-  summarize(
+  dplyr::summarize(
     contusion_seq_1=max(contusion_seq_1),
     contusion_any_seq=max(contusion_any_seq))
 
@@ -309,7 +309,7 @@ total_dataset %<>%
     ))
   )
 
-# Gravity scores variables
+# Severity scores variables
 total_dataset %<>%
   mutate(
     gcs_original = gcs, #new gcs variable to provide original gcs values without imputation
@@ -409,20 +409,20 @@ total_dataset_clean %<>%
     tbi_nonsevere_seq1 = ifelse(tbi_seq1 == 1 &
                                   gcs > 8, 1, 0),
     trauma_type_seq1 = as.factor(
-      ifelse(anytrauma_seq1 == 0, "non_trauma",
-             ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "trauma_non_tbi",
-                    ifelse(tbi_severe_seq1 == 1, "tbi_severe",
-                           ifelse(tbi_nonsevere_seq1 == 1, "tbi_non_severe", NA)))
+      ifelse(anytrauma_seq1 == 0, "no trauma",
+             ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "non-TBI trauma",
+                    ifelse(tbi_severe_seq1 == 1, "severe TBI",
+                           ifelse(tbi_nonsevere_seq1 == 1, "non-severe TBI", NA)))
       )
     ),
     tbi_severe_anyseq = ifelse(tbi_anyseq == 1 & gcs <= 8, 1, 0),
     tbi_nonsevere_anyseq = ifelse(tbi_anyseq == 1 &
                                   gcs > 8, 1, 0),
     trauma_type_anyseq = as.factor(
-      ifelse(anytrauma_anyseq == 0, "non_trauma",
-             ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "trauma_non_tbi",
-                    ifelse(tbi_severe_anyseq == 1, "tbi_severe",
-                           ifelse(tbi_nonsevere_anyseq == 1, "tbi_non_severe", NA)))
+      ifelse(anytrauma_anyseq == 0, "no trauma",
+             ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "non-TBI trauma",
+                    ifelse(tbi_severe_anyseq == 1, "severe TBI",
+                           ifelse(tbi_nonsevere_anyseq == 1, "non-severe TBI", NA)))
       )
     )
   )
@@ -431,10 +431,8 @@ total_dataset_clean %<>%
 total_dataset_clean %<>%
   mutate(sex = as.factor(sex), 
          discharge_location = as.factor(discharge_location), 
-         trauma_type_seq1 = as.factor(trauma_type_seq1), 
-         trauma_type_seq1 = relevel(trauma_type_seq1, ref = "non_trauma"),
-         trauma_type_anyseq = as.factor(trauma_type_anyseq), 
-         trauma_type_anyseq = relevel(trauma_type_anyseq, ref = "non_trauma"))
+         trauma_type_seq1 = factor(trauma_type_seq1, levels = c("no trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")),
+         trauma_type_anyseq = factor(trauma_type_anyseq, levels = c("no trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")))
 
 # Select and order columns
 total_dataset_clean %<>% 
@@ -451,7 +449,7 @@ total_dataset_clean %<>%
 group_dataset_1 <- total_dataset_clean %>%
   group_by(subject_id, hadm_id) %>%
   arrange (icu_admittime) %>% 
-  summarize(
+  dplyr::summarize(
     age=min(age), 
     sex=first(sex), 
     icu_admittime=min(icu_admittime), 
@@ -535,14 +533,16 @@ cat(sprintf('%d patients remaining, with %d patients having missing gcs values.\
 
 # Export file
 ```{r}
-write.csv(final_dataset_excluded,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv', row.names = F)
+final_dataset_df <- ungroup(final_dataset_excluded)
+
+saveRDS(final_dataset_df, file = "C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.rds")
 ```
 
 # Load File
 
 ```{r}
 # Load file
-final_dataset_MIMICIV <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv')
+final_dataset_MIMICIV <- readRDS("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.rds")
 
 # Print final dataset and data frame summary
 View(final_dataset_MIMICIV)

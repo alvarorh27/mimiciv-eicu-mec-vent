@@ -43,7 +43,7 @@ extract_coef_pval_OR <- function(model) {
 # Load File
 
 ```{r}
-final_dataset_MIMICIV <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv')
+final_dataset_MIMICIV <- readRDS("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.rds")
 ```
 
 

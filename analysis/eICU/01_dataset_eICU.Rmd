@@ -108,7 +108,7 @@ all_episodes_ventilation_eicu <- run_query(getSQL("sql/all_episodes_ventilation_
 tbi_eicu <- run_query(getSQL("sql/tbi_eicu.sql"))
 tbi_eicu %<>%
   group_by(stay_id) %>%
-  summarize(
+  dplyr::summarize(
     tbi_seq1=max(tbi_min_diagnosisoffset), 
     tbi_anyseq=max(tbi_any_diagnosisoffset))
 
@@ -116,7 +116,7 @@ tbi_eicu %<>%
 trauma_general_eicu <- run_query(getSQL("sql/trauma_general_eicu.sql"))
 trauma_general_eicu %<>%
   group_by(stay_id) %>%
-  summarize(
+  dplyr::summarize(
     traumatic_general_min_diagnosisoffset=max(traumatic_general_min_diagnosisoffset), 
     traumatic_general_any_diagnosisoffset=max(traumatic_general_any_diagnosisoffset))
 
@@ -124,7 +124,7 @@ trauma_general_eicu %<>%
 trauma_fractures_eicu <- run_query(getSQL("sql/trauma_fractures_eicu.sql"))
 trauma_fractures_eicu %<>%
   group_by(stay_id) %>%
-  summarize(
+  dplyr::summarize(
     fractures_min_diagnosisoffset=max(fractures_min_diagnosisoffset),
     fractures_any_diagnosisoffset=max(fractures_any_diagnosisoffset))
 
@@ -132,7 +132,7 @@ trauma_fractures_eicu %<>%
 trauma_luxations_eicu <- run_query(getSQL("sql/trauma_luxations_eicu.sql"))
 trauma_luxations_eicu %<>%
   group_by(stay_id) %>%
-  summarize(
+  dplyr::summarize(
     luxation_min_diagnosisoffset=max(luxation_min_diagnosisoffset),
     luxation_any_diagnosisoffset=max(luxation_any_diagnosisoffset))
 
@@ -143,7 +143,7 @@ trauma_sprains_eicu <- run_query(getSQL("sql/trauma_sprains_eicu.sql"))
 trauma_burns_eicu <- run_query(getSQL("sql/trauma_burns_eicu.sql"))
 trauma_burns_eicu %<>%
   group_by(stay_id) %>%
-  summarize(
+  dplyr::summarize(
     burns_min_diagnosisoffset=max(burns_min_diagnosisoffset),
     burns_any_diagnosisoffset=max(burns_any_diagnosisoffset))
 
@@ -366,19 +366,19 @@ total_dataset_clean %<>%
     tbi_severe_seq1 = as.integer(ifelse(tbi_seq1 == 1 & gcs <= 8, 1, 0)),
     tbi_nonsevere_seq1 = as.integer(ifelse(tbi_seq1 == 1 & gcs > 8, 1, 0)),
     trauma_type_seq1 = as.factor(
-      ifelse(anytrauma_seq1 == 0, "non_trauma",
-             ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "trauma_non_tbi",
-                    ifelse(tbi_severe_seq1 == 1, "tbi_severe",
-                           ifelse(tbi_nonsevere_seq1 == 1, "tbi_non_severe", NA)))
+      ifelse(anytrauma_seq1 == 0, "no trauma",
+             ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "non-TBI trauma",
+                    ifelse(tbi_severe_seq1 == 1, "severe TBI",
+                           ifelse(tbi_nonsevere_seq1 == 1, "non-severe TBI", NA)))
       )
     ),
     tbi_severe_anyseq = as.integer(ifelse(tbi_anyseq == 1 & gcs <= 8, 1, 0)),
     tbi_nonsevere_anyseq = as.integer(ifelse(tbi_anyseq == 1 & gcs > 8, 1, 0)),
     trauma_type_anyseq = as.factor(
-      ifelse(anytrauma_anyseq == 0, "non_trauma",
-             ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "trauma_non_tbi",
-                    ifelse(tbi_severe_anyseq == 1, "tbi_severe",
-                           ifelse(tbi_nonsevere_anyseq == 1, "tbi_non_severe", NA)))
+      ifelse(anytrauma_anyseq == 0, "no trauma",
+             ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "non-TBI trauma",
+                    ifelse(tbi_severe_anyseq == 1, "severe TBI",
+                           ifelse(tbi_nonsevere_anyseq == 1, "non-severe TBI", NA)))
       )
     )
   )
@@ -388,10 +388,8 @@ total_dataset_clean %<>%
   mutate(sex = as.factor(sex),
          sex = relevel(sex, ref = "Female"), #change reference level of factor sex variable to "Female"
          discharge_location = as.factor(discharge_location), 
-         trauma_type_seq1 = as.factor(trauma_type_seq1), 
-         trauma_type_seq1 = relevel(trauma_type_seq1, ref = "non_trauma"),
-         trauma_type_anyseq = as.factor(trauma_type_anyseq), 
-         trauma_type_anyseq = relevel(trauma_type_anyseq, ref = "non_trauma"))
+         trauma_type_seq1 = factor(trauma_type_seq1, levels = c("no trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")), 
+         trauma_type_anyseq = factor(trauma_type_anyseq, levels = c("no trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")))
 
 # Select and order columns
 total_dataset_clean_selected <- total_dataset_clean %>% 
@@ -407,7 +405,7 @@ total_dataset_clean_selected <- total_dataset_clean %>%
 group_dataset_1 <- total_dataset_clean_selected %>%
   group_by(subject_id, hadm_id) %>%
   arrange (unitvisitnumber) %>% 
-  summarize(
+  dplyr::summarize(
     age=min(age), 
     sex=first(sex), 
     unitvisitnumber=first(unitvisitnumber), 
@@ -449,7 +447,7 @@ group_dataset_1 <- total_dataset_clean_selected %>%
 all_episodes_ventilation_eicu_grouped <- all_episodes_ventilation_eicu %>% 
   group_by(subject_id, hadm_id) %>%
   arrange (unitvisitnumber) %>% 
-  summarize(
+  dplyr::summarize(
     icu_admit_time=first(icu_admit_time), 
     icu_outtime=last(icu_outtime), 
     starttime=min(starttime), 
@@ -572,14 +570,14 @@ gg_miss_var(final_dataset_imputed, show_pct=TRUE)
 # Export file
 
 ```{r}
-write.csv(final_dataset_imputed,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv', row.names = F)
+saveRDS(final_dataset_imputed, file = "C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.rds")
 ```
 
 # Load File
 
 ```{r}
 # Load file
-final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv')
+final_dataset_eICU <- readRDS('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.rds')
 
 # Print final dataset and data frame summary
 View(final_dataset_eICU)

@@ -18,33 +18,93 @@ library(knitr)
 # Load File
 
 ```{r}
-final_dataset_eICU <- read.csv('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv')
+final_dataset_eICU <- readRDS('C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.rds')
+```
+
+# Statistics
+```{r}
+# Print dfSummary
+stview(dfSummary(final_dataset_eICU)) 
+
+# Define the list of continuous variables that are not normally distributed
+nonnormal_variables <- c('age', 'hospital_stay_days', 'icu_stay_days', 'consecutive_vm_days', 'aps', 'charlson') 
+
+# Testing normality with Kolmogorov-Smirnov test
+# A low p-value (usually lower than 0.05) suggests that the variable does not follow a normal distribution
+for (col in nonnormal_variables) {
+  test_result <- ks.test(final_dataset_eICU[[col]], "pnorm", mean(final_dataset_eICU[[col]]), sd(final_dataset_eICU[[col]]))
+  print(paste("Variable:", col))
+  print(test_result)
+}
+```
+
+# Define functions
+```{r}
+# List of variables and labels for Table1 
+labels_list <- list(
+  age = 'Age (years)',
+  sex = 'Sex',
+  hospital_stay_days = 'Days at Hospital',
+  icu_stay_days = 'Days at ICU',
+  inhospital_death = 'Hospital Mortality',
+  inicu_death = 'Death at ICU',
+  death_30days = 'Death at 30 days',
+  death_year = 'Death at year',
+  tbi_anyseq = 'TBI', 
+  trauma_type_anyseq = 'Types of Trauma',
+  consecutive_vm_days = 'Consecutive days with MV',
+  mv_consecutive_14days = '14 consecutive days of MV',
+  mv_96traq = '96h of MV + Traq',
+  prolonged_mec_vent = 'PMV',
+  aps = 'APS score',
+  charlson = 'Charlson score'
+)
+
+# Function to detect categorical variables
+detect_categorical <- function(vars_in_table1, table1_dataset) {
+  cat_variables <- c()
+  cont <- 1
+  
+  for (i in 1:length(vars_in_table1)) {
+    if (n_distinct(table1_dataset[[vars_in_table1[i]]]) <= 10) {
+      print(i)
+      print(vars_in_table1[i])
+      print(names(table1_dataset[vars_in_table1[i]]))
+      cat_variables[cont] <- names(table1_dataset[vars_in_table1[i]])
+      cont <- cont + 1
+    }
+  }
+  
+  return(cat_variables)
+}
+
+# Function to assign labels to variable names
+assign_labels <- function(vars_in_table1, table1_dataset, labels_list) {
+  for (var in names(labels_list)) {
+    if (var %in% vars_in_table1) {
+      label(table1_dataset[[var]]) <- labels_list[[var]]
+    }
+  }
+  return(table1_dataset)
+}
 ```
 
 # Table one: Traumatic Brain Injury
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
-table1_dataset <- final_dataset_eICU[,vars_in_table1]
+stratifyby <- c("tbi_anyseq")
+table1_dataset <- final_dataset_eICU[,c(vars_in_table1, stratifyby)]
 cat_variables <- rep(NA, length(vars_in_table1))
 
-# Detects whether a variable is categorical or not
-cont <- 1
-for (i in 1:length(vars_in_table1) ) {
-  if ( n_distinct(table1_dataset[vars_in_table1[i] ])<=10 ) {
-    print(i)
-    print(vars_in_table1[i])
-    print(names(table1_dataset[vars_in_table1[i]]))
-    cat_variables[cont]<-names(table1_dataset[vars_in_table1[i]])
-    cont<-cont+1
-  }
-}
+# Assign labels to variable names
+table1_dataset <- assign_labels(vars_in_table1, table1_dataset, labels_list)
 
-# Establishes the stratification variables and eliminates null values from 'cat_variables'
-stratifyby <- c("tbi_anyseq")
+# Detects whether a variable is categorical or not and eliminates null values
+cat_variables <- detect_categorical(vars_in_table1, table1_dataset)
 cat_variables<-cat_variables[!is.na(cat_variables)]
 
 # Creates table one
@@ -68,99 +128,211 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
 
 ```
 
-# Table one: Prolonged Mecanical Ventilation
+# Table one: Hospital Mortality 
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'inicu_death', 'death_30days', 'tbi_anyseq', 'trauma_type_anyseq', 'consecutive_vm_days',  'mv_consecutive_14days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'charlson') 
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
-table1_dataset <- final_dataset_eICU[,vars_in_table1]
+stratifyby <- "inhospital_death"
+table1_dataset <- final_dataset_eICU[,c(vars_in_table1, stratifyby)]
+table1_dataset$inhospital_death <- factor(table1_dataset$inhospital_death, labels = c("No", "Yes"))
 cat_variables <- rep(NA, length(vars_in_table1))
 
-# Detects whether a variable is categorical or not
-cont <- 1
-for (i in 1:length(vars_in_table1) ) {
-  if ( n_distinct(table1_dataset[vars_in_table1[i] ])<=10 ) {
-    print(i)
-    print(vars_in_table1[i])
-    print(names(table1_dataset[vars_in_table1[i]]))
-    cat_variables[cont]<-names(table1_dataset[vars_in_table1[i]])
-    cont<-cont+1
-  }
-}
+# Assign labels to variable names
+table1_dataset <- assign_labels(vars_in_table1, table1_dataset, labels_list)
 
-# Establishes the stratification variables and eliminates null values from 'cat_variables'
-stratifyby <- c("prolonged_mec_vent")
+# Detects whether a variable is categorical or not and eliminates null values
+cat_variables <- detect_categorical(vars_in_table1, table1_dataset)
 cat_variables<-cat_variables[!is.na(cat_variables)]
 
 # Creates table one
-
-table1_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, factorVars = cat_variables, data = table1_dataset, addOverall=T),varLabels = T)
+table1 <- print(
+  CreateTableOne(
+    vars = vars_in_table1,
+    strata = stratifyby,
+    factorVars = cat_variables,
+    data = table1_dataset,
+    addOverall = T
+  ),
+  nonnormal = nonnormal_variables,
+  formatOptions = list(big.mark = ","),
+  varLabels = T
+)
 
 # Run this in console for html output, the code below uses kableExtra::
  starification_cats<-n_distinct(table1_dataset[,stratifyby])
  
 # For console
- table1_pmv %>%
+ table1 %>%
+   kbl(caption = "Table 1 of base model: Hospital Mortality. eICU Database" , align = "c") %>%
+   kable_classic_2(full_width = F, html_font = "Cambria") %>%
+   add_header_above(c("", "", "Hospital Mortality"=2, "", ""))
+ 
+# Export kable
+ table1 %>%
+   kbl(caption = "Table 1 of base model: Hospital Mortality eICU Database" , align = "c") %>%
+   kable_classic_2(full_width = F, html_font = "Cambria") %>%
+   add_header_above(c("", "", "No", "Yes", "", "")) %>%
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_hospdeath_eicu.jpg", zoom = 10)
+ 
+```
+
+# Table one: Prolonged Mecanical Ventilation
+
+```{r}
+# Lists the variables we are going to be including in table1 (except for the stratification variable)
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_anyseq', 'trauma_type_anyseq', 'consecutive_vm_days',  'mv_consecutive_14days', 'mv_96traq', 'aps', 'charlson') 
+
+# Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
+stratifyby <- "prolonged_mec_vent"
+table1_dataset <- final_dataset_eICU[,c(vars_in_table1, stratifyby)]
+table1_dataset$prolonged_mec_vent <- factor(table1_dataset$prolonged_mec_vent, labels = c("No", "Yes"))
+cat_variables <- rep(NA, length(vars_in_table1))
+
+# Assign labels to variable names
+table1_dataset <- assign_labels(vars_in_table1, table1_dataset, labels_list)
+
+# Detects whether a variable is categorical or not and eliminates null values
+cat_variables <- detect_categorical(vars_in_table1, table1_dataset)
+cat_variables<-cat_variables[!is.na(cat_variables)]
+
+# Creates table one
+table1 <- print(
+  CreateTableOne(
+    vars = vars_in_table1,
+    strata = stratifyby,
+    factorVars = cat_variables,
+    data = table1_dataset,
+    addOverall = T
+  ),
+  nonnormal = nonnormal_variables,
+  formatOptions = list(big.mark = ","),
+  varLabels = T
+)
+
+# Run this in console for html output, the code below uses kableExtra::
+ starification_cats<-n_distinct(table1_dataset[,stratifyby])
+ 
+# For console
+ table1 %>%
    kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation. eICU Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No", "Yes", "", ""))
+   add_header_above(c("", "", "PMV"=2, "", ""))
  
 #Export kable
- table1_pmv %>%  
+ table1 %>%  
    kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation. eICU Database" , align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", "")) %>% 
    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_pmv_eicu.jpg", zoom = 10)
 ```
 
-# Table one: Hospital Mortality 
+
+# Table one: 4 Trauma types
 
 ```{r}
 # Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'discharge_location', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_seq1', 'tbi_anyseq', 'anytrauma_seq1','anytrauma_anyseq', 'trauma_type_seq1', 'trauma_type_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'exit_with_mv', 'aps', 'apache', 'charlson', 'gcs') 
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_anyseq', 'consecutive_vm_days',  'mv_consecutive_14days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'charlson')
 
 # Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
-table1_dataset <- final_dataset_eICU[,vars_in_table1]
+stratifyby <- "trauma_type_anyseq"
+table1_dataset <- final_dataset_eICU[,c(vars_in_table1, stratifyby)]
 cat_variables <- rep(NA, length(vars_in_table1))
 
-# Detects whether a variable is categorical or not
-cont <- 1
-for (i in 1:length(vars_in_table1) ) {
-  if ( n_distinct(table1_dataset[vars_in_table1[i] ])<=10 ) {
-    print(i)
-    print(vars_in_table1[i])
-    print(names(table1_dataset[vars_in_table1[i]]))
-    cat_variables[cont]<-names(table1_dataset[vars_in_table1[i]])
-    cont<-cont+1
-  }
-}
+# Assign labels to variable names
+table1_dataset <- assign_labels(vars_in_table1, table1_dataset, labels_list)
 
-# Establishes the stratification variables and eliminates null values from 'cat_variables'
-stratifyby <- c("inhospital_death")
+# Detects whether a variable is categorical or not and eliminates null values
+cat_variables <- detect_categorical(vars_in_table1, table1_dataset)
 cat_variables<-cat_variables[!is.na(cat_variables)]
 
 # Creates table one
-
-table1_hospdeath<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, factorVars = cat_variables, data = table1_dataset, addOverall=T),varLabels = T)
+table1 <- print(
+  CreateTableOne(
+    vars = vars_in_table1,
+    strata = stratifyby,
+    factorVars = cat_variables,
+    data = table1_dataset,
+    addOverall = T
+  ),
+  nonnormal = nonnormal_variables,
+  formatOptions = list(big.mark = ","),
+  varLabels = T
+)
 
 # Run this in console for html output, the code below uses kableExtra::
  starification_cats<-n_distinct(table1_dataset[,stratifyby])
  
 # For console
- table1_hospdeath %>%
-   kbl(caption = "Table 1 of base model: Hospital Mortality. eICU Database" , align = "c") %>%
+ table1 %>%
+   kbl(caption = "Table 1 of base model: Trauma Types. eICU Database" ,     align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No", "Yes", "", ""))
+   add_header_above(c("", "", "Types of Trauma"=4, " ", " "))
  
 # Export kable
- table1_hospdeath %>%
-   kbl(caption = "Table 1 of base model: Hospital Mortality eICU Database" , align = "c") %>%
+ table1 %>%
+   kbl(caption = "Table 1 of base model: Table 1 of base model: Trauma types. eICU Database" ,     align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_hospdeath_eicu.jpg", zoom = 10)
+   add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_and_pmv_eicu.jpg", zoom = 10)
+```
+
+# Table one: severe TBI and hospital mortality
+
+```{r}
+# Lists the variables we are going to be including in table1 (except for the stratification variable)
+vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'inicu_death', 'death_30days', 'consecutive_vm_days',  'mv_consecutive_14days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'charlson') 
+
+# Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
+stratifyby <- c("inhospital_death")
+table1_dataset <- final_dataset_eICU[final_dataset_eICU$trauma_type_anyseq=="severe TBI",
+                                        c(vars_in_table1, stratifyby)]
+table1_dataset$inhospital_death <- factor(table1_dataset$inhospital_death, labels = c("Alive", "Expired"))
+cat_variables <- rep(NA, length(vars_in_table1))
+
+# Extract 90th percentile of severe TBI expired cohort patients
+filtered_dataset <- table1_dataset[table1_dataset$inhospital_death == "Expired", ]
+percentile_90 <- quantile(filtered_dataset$icu_stay_days, 0.90, na.rm = TRUE)
+percentile_90
+
+# Assign labels to variable names
+table1_dataset <- assign_labels(vars_in_table1, table1_dataset, labels_list)
+
+# Detects whether a variable is categorical or not and eliminates null values
+cat_variables <- detect_categorical(vars_in_table1, table1_dataset)
+cat_variables<-cat_variables[!is.na(cat_variables)]
+
+# Creates table one
+table1 <- print(
+  CreateTableOne(
+    vars = vars_in_table1,
+    strata = stratifyby,
+    factorVars = cat_variables,
+    data = table1_dataset,
+    addOverall = T
+  ),
+  nonnormal = nonnormal_variables,
+  formatOptions = list(big.mark = ","),
+  varLabels = T
+)
+
+# Run this in console for html output, the code below uses kableExtra::
+ starification_cats<-n_distinct(table1_dataset[,stratifyby])
  
+# For console
+ table1 %>%
+   kbl(caption = "Table 1 of base model:  severe TBI patient cohort and Hospital Mortality. eICU Database" ,     align = "c") %>%
+   kable_classic_2(full_width = F, html_font = "Cambria") %>%
+   add_header_above(c("", "", "Hospital Mortality"=2, "", ""))
+ 
+# Export kable
+ table1 %>%
+   kbl(caption = "Table 1 of base model: non-TBI Trauma VS Prolonged Mechanical Ventilation. eICU Database" ,     align = "c") %>%
+   kable_classic_2(full_width = F, html_font = "Cambria") %>%
+   add_header_above(c("", "", "Non-TBI Trauma"=2, "", "")) %>%
+   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_severetbi&hospdeath_eICU.jpg", zoom = 10)
 ```
 
 # Table one: TBI and PMV

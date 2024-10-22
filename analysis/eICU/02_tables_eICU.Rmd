@@ -12,7 +12,9 @@ library(tableone)
 library(kableExtra)
 library(gtsummary)
 library(knitr)
-
+library(flextable)
+library(tibble)
+library(officer)
 ```
 
 # Load File
@@ -44,17 +46,17 @@ for (col in nonnormal_variables) {
 labels_list <- list(
   age = 'Age (years)',
   sex = 'Sex',
-  hospital_stay_days = 'Days at Hospital',
-  icu_stay_days = 'Days at ICU',
+  hospital_stay_days = 'Hospital stay (days)',
+  icu_stay_days = 'ICU stay (days)',
   inhospital_death = 'Hospital Mortality',
-  inicu_death = 'Death at ICU',
-  death_30days = 'Death at 30 days',
-  death_year = 'Death at year',
+  inicu_death = 'ICU Mortality',
+  death_30days = '30-day Mortality',
+  death_year = '1-year Mortality',
   tbi_anyseq = 'TBI', 
-  trauma_type_anyseq = 'Types of Trauma',
-  consecutive_vm_days = 'Consecutive days with MV',
-  mv_consecutive_14days = '14 consecutive days of MV',
-  mv_96traq = '96h of MV + Traq',
+  trauma_type_anyseq = 'Trauma-related cohort',
+  consecutive_vm_days = 'Consecutive days with ≥6h IMV',
+  mv_consecutive_14days = '≥14 consecutive days of IMV',
+  mv_96traq = '96h of IMV + Traq',
   prolonged_mec_vent = 'PMV',
   aps = 'APS score',
   charlson = 'Charlson score'
@@ -86,6 +88,37 @@ assign_labels <- function(vars_in_table1, table1_dataset, labels_list) {
     }
   }
   return(table1_dataset)
+}
+
+## Define the root directory
+root_dir <- "C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent"
+
+# Function to create and export a docx table using flextable package
+create_flextable <- function(table1, values, colwidths, title, save_name) {
+  
+  # Convert the table to a data frame and adjust columns
+  table_df <- as.data.frame(table1) %>%
+    rownames_to_column(var = "Variable") %>%
+    select(-("test"))  # Removing the 'test' column
+  
+  # Set default font size for the flextable
+  set_flextable_defaults(font.size = 10)
+  
+  # Create a flextable and format the table
+  table_doc <- flextable(table_df) %>%
+    add_header_row(
+      values = values,   # Custom header values
+      colwidths = colwidths  # Custom column widths
+    ) %>%
+    set_caption(caption = title) %>%
+    set_table_properties(layout = "autofit") %>%
+    align(align = "left", part = "body", j = 1) %>%  # Aligns first column to the left
+    align(align = "center", part = "body", j = 2:ncol(table_df))  # Aligns rest to center
+  
+  # Export the table to a .docx file
+  read_docx() %>%
+    body_add_flextable(value = table_doc) %>%
+    print(target = file.path(root_dir, "data/eICU/tables", paste0(save_name, ".docx")))  # Save the file with custom name
 }
 ```
 
@@ -119,12 +152,12 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", ""))
 
-# Export kable 
-  table1_tbi %>%
-   kbl(caption = "Table 1 of base model: Traumatic Brain Injury. eICU Database" , align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_eicu.jpg", zoom = 10)
+# # Export kable 
+#   table1_tbi %>%
+#    kbl(caption = "Table 1 of base model: Traumatic Brain Injury. eICU Database" , align = "c") %>%
+#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
+#    add_header_above(c("", "", "No", "Yes", "", "")) %>%
+#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_eicu.jpg", zoom = 10)
 
 ```
 
@@ -170,12 +203,21 @@ table1 <- print(
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "Hospital Mortality"=2, "", ""))
  
-# Export kable
- table1 %>%
-   kbl(caption = "Table 1 of base model: Hospital Mortality eICU Database" , align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No", "Yes", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_hospdeath_eicu.jpg", zoom = 10)
+# Export table in docx
+create_flextable(
+  table1 = table1,
+  values = c("", "", "Hospital Mortality", ""),
+  colwidths = c(1, 1, 2, 1),
+  title = "Baseline characteristics of eICU study population stratified by Hospital Mortality",
+  save_name = "table1_hospdeath_eICU"
+)
+ 
+# # Export kable
+#  table1 %>%
+#    kbl(caption = "Table 1 of base model: Hospital Mortality eICU Database" , align = "c") %>%
+#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
+#    add_header_above(c("", "", "No", "Yes", "", "")) %>%
+#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_hospdeath_eicu.jpg", zoom = 10)
  
 ```
 
@@ -221,12 +263,21 @@ table1 <- print(
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "PMV"=2, "", ""))
  
-#Export kable
- table1 %>%  
-   kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation. eICU Database" , align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No", "Yes", "", "")) %>% 
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_pmv_eicu.jpg", zoom = 10)
+# Export table in docx
+create_flextable(
+  table1 = table1,
+  values = c("", "", "PMV", ""),
+  colwidths = c(1, 1, 2, 1),
+  title = "Baseline characteristics of eICU study population stratified by PMV",
+  save_name = "table1_PMV_eICU"
+)
+ 
+# #Export kable
+#  table1 %>%  
+#    kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation. eICU Database" , align = "c") %>%
+#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
+#    add_header_above(c("", "", "No", "Yes", "", "")) %>% 
+#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_pmv_eicu.jpg", zoom = 10)
 ```
 
 
@@ -269,14 +320,23 @@ table1 <- print(
  table1 %>%
    kbl(caption = "Table 1 of base model: Trauma Types. eICU Database" ,     align = "c") %>%
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "Types of Trauma"=4, " ", " "))
+   add_header_above(c("", "", "Trauma-related cohorts"=4, " ", " "))
  
-# Export kable
- table1 %>%
-   kbl(caption = "Table 1 of base model: Table 1 of base model: Trauma types. eICU Database" ,     align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_and_pmv_eicu.jpg", zoom = 10)
+# Export table in docx
+create_flextable(
+  table1 = table1,
+  values = c("", "", "Trauma-related cohorts", ""),
+  colwidths = c(1, 1, 4, 1),
+  title = "Baseline characteristics of eICU study population stratified by Trauma-related diagnoses",
+  save_name = "table1_trauma_eICU"
+)
+ 
+# # Export kable
+#  table1 %>%
+#    kbl(caption = "Table 1 of base model: Table 1 of base model: Trauma types. eICU Database" ,     align = "c") %>%
+#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
+#    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
+#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_and_pmv_eicu.jpg", zoom = 10)
 ```
 
 # Table one: severe TBI and hospital mortality
@@ -327,12 +387,12 @@ table1 <- print(
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "Hospital Mortality"=2, "", ""))
  
-# Export kable
- table1 %>%
-   kbl(caption = "Table 1 of base model: non-TBI Trauma VS Prolonged Mechanical Ventilation. eICU Database" ,     align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "Non-TBI Trauma"=2, "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_severetbi&hospdeath_eICU.jpg", zoom = 10)
+# # Export kable
+#  table1 %>%
+#    kbl(caption = "Table 1 of base model: non-TBI Trauma VS Prolonged Mechanical Ventilation. eICU Database" ,     align = "c") %>%
+#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
+#    add_header_above(c("", "", "Non-TBI Trauma"=2, "", "")) %>%
+#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_severetbi&hospdeath_eICU.jpg", zoom = 10)
 ```
 
 # Table one: TBI and PMV
@@ -374,12 +434,12 @@ table1_tbi_and_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratif
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " "))
  
-# Export kable
- table1_tbi_and_pmv %>%
-   kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation. eICU Database" ,     align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_and_pmv_eicu.jpg", zoom = 10)
+# # Export kable
+#  table1_tbi_and_pmv %>%
+#    kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation. eICU Database" ,     align = "c") %>%
+#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
+#    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
+#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_and_pmv_eicu.jpg", zoom = 10)
 ```
 
 # Table one: Subset of TBI and PMV
@@ -424,11 +484,11 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "Non-severe TBI", "Severe TBI", "", ""))
 
-# Export kable 
-  table1_tbi %>%
-   kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV. eICU Database" , align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "Non-severe TBI", "Severe TBI", "", "")) %>%
-   save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_subset_tbi-pmv_eicu.jpg", zoom = 10)
+# # Export kable 
+#   table1_tbi %>%
+#    kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV. eICU Database" , align = "c") %>%
+#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
+#    add_header_above(c("", "", "Non-severe TBI", "Severe TBI", "", "")) %>%
+#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_subset_tbi-pmv_eicu.jpg", zoom = 10)
 
 ```

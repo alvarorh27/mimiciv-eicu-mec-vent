@@ -32,9 +32,10 @@ root_dir <- "C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent"
 
 ## Function for recategorizing column to a specific variable 
 recategorize_function <- function(df, df_column, column_value) {
-  df %>% 
+  df_mod <- df %>%
     mutate(!!df_column := as.factor(.data[[df_column]]),
            !!df_column := relevel(as.factor(.data[[df_column]]), ref = column_value))
+  return(df_mod)
 }
 
 ## Function for extracting OR
@@ -81,27 +82,36 @@ dict_terms <- c(
   "prolonged_mec_vent" = "PMV",
   "trauma_type_anyseqnon-severe TBI" = "TBI non-severe",
   "trauma_type_anyseqsevere TBI" = "TBI severe",
-  "trauma_type_anyseqnon-TBI trauma" = "non-TBI Trauma",
-  "trauma_type_anyseqno trauma" = "Non Trauma",
+  "trauma_type_anyseqnon-TBI trauma" = "non-TBI trauma",
+  "trauma_type_anyseqnon-trauma" = "non-trauma",
   "prolonged_mec_vent:trauma_type_anyseqsevere TBI" = "PMV + TBI non-severe",
   "prolonged_mec_vent:trauma_type_anyseqnon-severe TBI" = "PMV + TBI severe",
-  "prolonged_mec_vent:trauma_type_anyseqnon-TBI trauma" = "PMV + non-TBI Trauma",
-  "prolonged_mec_vent:trauma_type_anyseqno trauma" = "PMV + Non Trauma",
+  "prolonged_mec_vent:trauma_type_anyseqnon-TBI trauma" = "PMV + non-TBI trauma",
+  "prolonged_mec_vent:trauma_type_anyseqnon-trauma" = "PMV + non-trauma",
   "anytrauma_anyseq" = "Any Trauma", 
   "prolonged_mec_vent:anytrauma_anyseq" = "PMV + Any Trauma",
   "age" = "Age (years)",
   "sexM" = "Sex (male)",
   "apsiii" = "APSIII",
   "charlson" = "Charlson", 
-  "PMV for non-Trauma" = "PMV - Non Trauma",
-  "PMV for Trauma not TBI" = "PMV - non-TBI Trauma",
+  "PMV for non-Trauma" = "PMV - non-trauma",
+  "PMV for Trauma not TBI" = "PMV - non-TBI trauma",
   "PMV for TBI non-severe" = "PMV - non-severe TBI",
   "PMV for TBI severe" = "PMV - severe TBI"
 )
 
+## List of comorbidities
+comorbidities <- c(
+  "myocardial_infarct", "congestive_heart_failure", "peripheral_vascular_disease", 
+  "cerebrovascular_disease", "dementia", "chronic_pulmonary_disease", 
+  "rheumatic_disease", "peptic_ulcer_disease", "mild_liver_disease", 
+  "diabetes_without_cc", "diabetes_with_cc", "paraplegia", "renal_disease", 
+  "malignant_cancer", "severe_liver_disease", "metastatic_solid_tumor", "aids"
+)
+
 ## Variable order in OR table
 variable_order <- c(
-  "Intercept", "Age (years)", "Sex (male)", "APSIII", "Charlson", "PMV", "Non Trauma", "non-TBI Trauma", "TBI non-severe", "TBI severe", "PMV + Non Trauma", "PMV + non-TBI Trauma", "PMV + TBI non-severe", "PMV + TBI severe", "PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI Trauma", "PMV - Non Trauma")
+  "Intercept", "Age (years)", "Sex (male)", "APSIII", "Charlson", "PMV", "non-trauma", "non-TBI trauma", "TBI non-severe", "TBI severe", "PMV + non-trauma", "PMV + non-TBI trauma", "PMV + TBI non-severe", "PMV + TBI severe", "PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")
 
 ## Variables for table output in console
 var_html <- c("term", "p.value", "OR","OR_lower","OR_upper")
@@ -165,7 +175,6 @@ create_summary_table <- function(df, death_outcome, df_column=NULL, row_label, c
   return(summary_table)
 }
 
-
 # Titles for html outputs
 caption_hospdeath_multivariable <- "Multivariable Analysis. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. MIMIC-IV Database"
 caption_deathyear_multivariable <- "Multivariable Analysis. Odds Ratio and Confidence Intervals for 1 Year-Mortality-associated Factors. MIMIC-IV Database"
@@ -187,9 +196,11 @@ final_dataset_MIMICIV <- readRDS("C:/Users/se_al/Documents/GitHub/mimiciv-mec-ve
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent + age + sex + apsiii + charlson,
+  as.formula(paste("inhospital_death ~ prolonged_mec_vent + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_MIMICIV,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -209,15 +220,17 @@ or_hospdeath_PMV_allpopulation_mimiciv_univariate <- univariate_analysis(df=fina
 
 ```{r}
 # Multivariate analysis
-## Recategorize "no trauma" as reference level in trauma_type_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "no trauma")
+# Recategorize "non-trauma" as reference level in trauma_type_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "non-trauma")
 
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +",
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -243,9 +256,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "any
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -272,10 +287,12 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
- 
+  family = binomial()
+)
+
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
@@ -300,9 +317,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tbi
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("inhospital_death ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -328,9 +347,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
  
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -357,9 +378,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
  
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -400,7 +423,7 @@ htmlTable(MIMICIV_or_hospdeath_PMV_multivariate[,var_html], caption = "Multivari
 MIMICIV_or_hospdeath_PMV_multivariate_2 <- or_transformation(MIMICIV_or_hospdeath_PMV_multivariate, dict_terms, variable_order)
 # Order and select OR table for building Forest Plot
 MIMICIV_or_hospdeath_PMV_multivariate_3 <- MIMICIV_or_hospdeath_PMV_multivariate_2 %>% 
-  filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI Trauma", "PMV - Non Trauma")) %>% 
+  filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")) %>% 
   mutate(term = factor(term, levels = variable_order)) %>%
   arrange(term)
 
@@ -464,9 +487,9 @@ htmlTable(hospdeath_univariate_summary, caption = "Univariate Analysis for diffe
 # Obtain counts and mortality percentages for each trauma subset
 all_summary <- create_summary_table(df=final_dataset_MIMICIV, death_outcome="inhospital_death", row_label="All selected population")
 any_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "anytrauma_anyseq", "Any Trauma", 1)
-non_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "trauma_type_anyseq", "Non Trauma", "no trauma")
+non_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "trauma_type_anyseq", "non-trauma", "non-trauma")
 tbi_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "tbi_anyseq", "TBI", 1)
-nontbi_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "trauma_type_anyseq", "non-TBI Trauma", "non-TBI trauma")
+nontbi_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "trauma_type_anyseq", "non-TBI trauma", "non-TBI trauma")
 nonsevere_tbi_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "trauma_type_anyseq", "non-severe TBI", "non-severe TBI")
 severe_tbi_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="inhospital_death", "trauma_type_anyseq", "severe TBI", "severe TBI")
 
@@ -496,9 +519,11 @@ htmlTable(hospdeath_counts_summary, caption = "Counts and percentages of differe
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-   death_year ~ prolonged_mec_vent + age + sex + apsiii + charlson,
+  as.formula(paste("death_year ~ prolonged_mec_vent + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_MIMICIV,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -518,15 +543,17 @@ or_deathyear_PMV_allpopulation_mimiciv_univariate <- univariate_analysis(df=fina
 
 ```{r}
 # Multivariate analysis
-## Recategorize "no trauma" as reference level in trauma_type_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "no trauma")
+## Recategorize "non-trauma" as reference level in trauma_type_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "non-trauma")
 
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-   death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +",
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -552,9 +579,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "any
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-   death_year ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("death_year ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -581,9 +610,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-   death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
  
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -609,9 +640,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tbi
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-   death_year ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("death_year ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
 
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -637,9 +670,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-   death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
  
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -666,9 +701,11 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-   death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
+                   paste(comorbidities, collapse = " + "))),
   data = final_dataset_recategorized,
-  family = binomial())
+  family = binomial()
+)
  
 ## Extract OR, assign proper labels and save PMV's OR for this specific model 
 or_1 <- extract_coef_pval_OR(logreg)
@@ -709,7 +746,7 @@ htmlTable(MIMICIV_or_deathyear_PMV_multivariate[,var_html], caption = "Multivari
 MIMICIV_or_deathyear_PMV_multivariate_2 <- or_transformation(MIMICIV_or_deathyear_PMV_multivariate, dict_terms, variable_order)
 # Order and select OR table for building Forest Plot
 MIMICIV_or_deathyear_PMV_multivariate_3 <- MIMICIV_or_deathyear_PMV_multivariate_2 %>% 
-  filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI Trauma", "PMV - Non Trauma")) %>% 
+  filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")) %>% 
   mutate(term = factor(term, levels = variable_order)) %>%
   arrange(term)
 
@@ -773,9 +810,9 @@ htmlTable(deathyear_univariate_summary, caption = "Univariate Analysis for diffe
 # Obtain counts and mortality percentages for each trauma subset
 all_summary <- create_summary_table(df=final_dataset_MIMICIV, death_outcome="death_year", row_label="All selected population")
 any_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "anytrauma_anyseq", "Any Trauma", 1)
-non_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "trauma_type_anyseq", "Non Trauma", "no trauma")
+non_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "trauma_type_anyseq", "non-trauma", "non-trauma")
 tbi_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "tbi_anyseq", "TBI", 1)
-nontbi_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "trauma_type_anyseq", "non-TBI Trauma", "non-TBI trauma")
+nontbi_trauma_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "trauma_type_anyseq", "non-TBI trauma", "non-TBI trauma")
 nonsevere_tbi_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "trauma_type_anyseq", "non-severe TBI", "non-severe TBI")
 severe_tbi_summary <- create_summary_table(final_dataset_MIMICIV, death_outcome="death_year", "trauma_type_anyseq", "severe TBI", "severe TBI")
 

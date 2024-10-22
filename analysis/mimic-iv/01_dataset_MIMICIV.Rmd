@@ -324,7 +324,7 @@ total_dataset %<>%
 ```{r}
 # Select the desired columns and order the result
 total_dataset %<>% 
-  select(subject_id, hadm_id, stay_id, age, sex, icu_admittime, icu_outtime, hospital_stay_days, icu_stay_days, discharge_location, date_of_death, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, first_vent_starttime, last_vent_endtime, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, charlson, gcs_original, gcs, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal) %>%
+  select(subject_id, hadm_id, stay_id, age, sex, icu_admittime, icu_outtime, hospital_stay_days, icu_stay_days, discharge_location, date_of_death, inhospital_death, inicu_death, death_30days, death_year, tbi_seq1, tbi_anyseq, anytrauma_seq1, anytrauma_anyseq, first_vent_starttime, last_vent_endtime, consecutive_vm_days, mv_consecutive_7days, mv_consecutive_14days, mv_consecutive_21days, total_vm_days, mv_total_7days, mv_total_14days, mv_total_21days, mv_96traq, prolonged_mec_vent, apsiii, apsiii_prob, sapsii, sapsii_prob, charlson, gcs_original, gcs, gcs_motor, gcs_verbal, gcs_eyes, gcs_unable, sofa, respiration, coagulation, liver, cardiovascular, cns, renal, myocardial_infarct, congestive_heart_failure, peripheral_vascular_disease, cerebrovascular_disease, dementia, chronic_pulmonary_disease, rheumatic_disease, peptic_ulcer_disease, mild_liver_disease, diabetes_without_cc, diabetes_with_cc, paraplegia, renal_disease, malignant_cancer, severe_liver_disease, metastatic_solid_tumor, aids) %>%
   arrange(subject_id, icu_admittime)
 
 ```
@@ -403,13 +403,13 @@ gg_miss_var(total_dataset_clean, show_pct=TRUE)
 ## Creation of additional variables
 ```{r}
 # Create variable tbi severe and non-severe tbi, as well as trauma_type, containing 4 types of trauma in our dataset: TBI, general traumatism without TBI, severe TBI, non-severe TBI, for both seq1 and anyseq 
-total_dataset_clean %<>%
+total_dataset_full <- total_dataset_clean %>% 
   mutate(
     tbi_severe_seq1 = ifelse(tbi_seq1 == 1 & gcs <= 8, 1, 0),
     tbi_nonsevere_seq1 = ifelse(tbi_seq1 == 1 &
                                   gcs > 8, 1, 0),
     trauma_type_seq1 = as.factor(
-      ifelse(anytrauma_seq1 == 0, "no trauma",
+      ifelse(anytrauma_seq1 == 0, "non-trauma",
              ifelse(anytrauma_seq1 == 1 & tbi_seq1 == 0, "non-TBI trauma",
                     ifelse(tbi_severe_seq1 == 1, "severe TBI",
                            ifelse(tbi_nonsevere_seq1 == 1, "non-severe TBI", NA)))
@@ -419,7 +419,7 @@ total_dataset_clean %<>%
     tbi_nonsevere_anyseq = ifelse(tbi_anyseq == 1 &
                                   gcs > 8, 1, 0),
     trauma_type_anyseq = as.factor(
-      ifelse(anytrauma_anyseq == 0, "no trauma",
+      ifelse(anytrauma_anyseq == 0, "non-trauma",
              ifelse(anytrauma_anyseq == 1 & tbi_anyseq == 0, "non-TBI trauma",
                     ifelse(tbi_severe_anyseq == 1, "severe TBI",
                            ifelse(tbi_nonsevere_anyseq == 1, "non-severe TBI", NA)))
@@ -428,15 +428,15 @@ total_dataset_clean %<>%
   )
 
 # Convert categorical variables to factor
-total_dataset_clean %<>%
+total_dataset_full %<>%
   mutate(sex = as.factor(sex), 
          discharge_location = as.factor(discharge_location), 
-         trauma_type_seq1 = factor(trauma_type_seq1, levels = c("no trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")),
-         trauma_type_anyseq = factor(trauma_type_anyseq, levels = c("no trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")))
+         trauma_type_seq1 = factor(trauma_type_seq1, levels = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")),
+         trauma_type_anyseq = factor(trauma_type_anyseq, levels = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")))
 
 # Select and order columns
-total_dataset_clean %<>% 
-  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, first_vent_starttime, last_vent_endtime, exit_with_mv, consecutive_vm_days:renal) %>%
+total_dataset_full %<>% 
+  select(subject_id:anytrauma_anyseq, tbi_severe_seq1, tbi_nonsevere_seq1, trauma_type_seq1, tbi_severe_anyseq, tbi_nonsevere_anyseq, trauma_type_anyseq, first_vent_starttime, last_vent_endtime, exit_with_mv, consecutive_vm_days:renal, myocardial_infarct:aids) %>%
   arrange(subject_id, icu_admittime)
 ```
 
@@ -446,7 +446,7 @@ total_dataset_clean %<>%
 # Group all stay_id within joint hospital admissions
 
 #Summarizing variables into hadm_id groups
-group_dataset_1 <- total_dataset_clean %>%
+group_dataset_1 <- total_dataset_full %>%
   group_by(subject_id, hadm_id) %>%
   arrange (icu_admittime) %>% 
   dplyr::summarize(
@@ -485,10 +485,27 @@ group_dataset_1 <- total_dataset_clean %>%
     mv_total_21days = ifelse(total_vm_days>=21, 1, 0),
     mv_96traq=max(mv_96traq), 
     prolonged_mec_vent=max(prolonged_mec_vent), 
+    myocardial_infarct=first(myocardial_infarct),
+    congestive_heart_failure=first(congestive_heart_failure),
+    peripheral_vascular_disease=first(peripheral_vascular_disease),
+    cerebrovascular_disease=first(cerebrovascular_disease),
+    dementia=first(dementia),
+    chronic_pulmonary_disease=first(chronic_pulmonary_disease),
+    rheumatic_disease=first(rheumatic_disease),
+    peptic_ulcer_disease=first(peptic_ulcer_disease),
+    mild_liver_disease=first(mild_liver_disease),
+    diabetes_without_cc=first(diabetes_without_cc),
+    diabetes_with_cc=first(diabetes_with_cc),
+    paraplegia=first(paraplegia),
+    renal_disease=first(renal_disease),
+    malignant_cancer=first(malignant_cancer),
+    severe_liver_disease=first(severe_liver_disease),
+    metastatic_solid_tumor=first(metastatic_solid_tumor),
+    aids=first(aids)
           ) %>%
     arrange(subject_id)
 
-#Select severity scores related to first stay_id. It must be noted that stay_id in MIMIC-IV are not necessarily ordered numerically, so we order by ICU admission time.  
+# Select severity scores related to first stay_id. It must be noted that stay_id in MIMIC-IV are not necessarily ordered numerically, so we order by ICU admission time.  
 group_dataset_2 <- total_dataset_clean %>%
   group_by(subject_id, hadm_id) %>%
   arrange (icu_admittime) %>% 
@@ -496,18 +513,18 @@ group_dataset_2 <- total_dataset_clean %>%
   select(apsiii:renal) %>%
   arrange(subject_id)
 
-#Merging two grouped datasets
+# Merging two grouped datasets
 final_dataset_hadmid <- group_dataset_1 %>%
   left_join(group_dataset_2, by = c("subject_id","hadm_id"))
 
-# Select subject_id from first hadm_id 
+# Select stay_id from first hadm_id 
 final_dataset_merged <- final_dataset_hadmid %>%
   group_by(subject_id) %>%
   arrange (icu_admittime) %>% 
   filter(row_number() == 1) %>%
   arrange(subject_id)
 
-#Print flowchart grouping criteria
+# Print flowchart grouping criteria
 cat(sprintf('%d unique patients in ICU in original MIMIC-IV database.\n', nrow(total_dataset_clean)))
 
 rows_excluded_hadmid <- nrow(total_dataset_clean)-nrow(group_dataset_1)

@@ -436,7 +436,7 @@ fp_PMV_alltraumas_hospdeath_mimiciv <- ggplot(MIMICIV_or_hospdeath_PMV_multivari
   geom_point(size = 2, aes(color = adverse_protective)) +
   geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
   geom_vline(xintercept = 1, linetype = "dashed") +
-  labs(x = "Odds Ratio", y = NULL, title = "Multivariate Analysis. Odds Ratio and Confidence Intervals\nfor factors associated with 1 Year-Mortality.\nAll types of trauma. MIMIC-IV Database") +
+  labs(x = "Odds Ratio", y = NULL, title = "a. MIMIC-IV. Outcome: Hospital Mortality") +
   theme_minimal() +
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),
@@ -759,7 +759,7 @@ fp_PMV_alltraumas_deathyear_mimiciv <- ggplot(MIMICIV_or_deathyear_PMV_multivari
   geom_point(size = 2, aes(color = adverse_protective)) +
   geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
   geom_vline(xintercept = 1, linetype = "dashed") +
-  labs(x = "Odds Ratio", y = NULL, title = "Multivariate Analysis. Odds Ratio and Confidence Intervals\nfor factors associated with 1 Year-Mortality.\nAll types of trauma. MIMIC-IV Database") +
+  labs(x = "Odds Ratio", y = NULL, title = "b. MIMIC-IV. Outcome: 1-Year Mortality") +
   theme_minimal() +
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),

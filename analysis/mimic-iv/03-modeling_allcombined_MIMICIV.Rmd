@@ -100,14 +100,14 @@ dict_terms <- c(
   "PMV for TBI severe" = "PMV - severe TBI"
 )
 
-## List of comorbidities
-comorbidities <- c(
-  "myocardial_infarct", "congestive_heart_failure", "peripheral_vascular_disease", 
-  "cerebrovascular_disease", "dementia", "chronic_pulmonary_disease", 
-  "rheumatic_disease", "peptic_ulcer_disease", "mild_liver_disease", 
-  "diabetes_without_cc", "diabetes_with_cc", "paraplegia", "renal_disease", 
-  "malignant_cancer", "severe_liver_disease", "metastatic_solid_tumor", "aids"
-)
+# ## List of comorbidities
+# comorbidities <- c(
+#   "myocardial_infarct", "congestive_heart_failure", "peripheral_vascular_disease", 
+#   "cerebrovascular_disease", "dementia", "chronic_pulmonary_disease", 
+#   "rheumatic_disease", "peptic_ulcer_disease", "mild_liver_disease", 
+#   "diabetes_without_cc", "diabetes_with_cc", "paraplegia", "renal_disease", 
+#   "malignant_cancer", "severe_liver_disease", "metastatic_solid_tumor", "aids"
+# )
 
 ## Variable order in OR table
 variable_order <- c(
@@ -196,8 +196,7 @@ final_dataset_MIMICIV <- readRDS("C:/Users/se_al/Documents/GitHub/mimiciv-mec-ve
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  as.formula(paste("inhospital_death ~ prolonged_mec_vent + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  inhospital_death ~ prolonged_mec_vent + age + sex + apsiii + charlson,
   data = final_dataset_MIMICIV,
   family = binomial()
 )
@@ -226,8 +225,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +",
-                   paste(comorbidities, collapse = " + "))),
+  inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -256,8 +254,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "any
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  as.formula(paste("inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -287,8 +284,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -317,8 +313,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tbi
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  as.formula(paste("inhospital_death ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  inhospital_death ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -347,8 +342,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -378,8 +372,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  as.formula(paste("inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -519,8 +512,7 @@ htmlTable(hospdeath_counts_summary, caption = "Counts and percentages of differe
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  as.formula(paste("death_year ~ prolonged_mec_vent + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  death_year ~ prolonged_mec_vent + age + sex + apsiii + charlson,
   data = final_dataset_MIMICIV,
   family = binomial()
 )
@@ -549,8 +541,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +",
-                   paste(comorbidities, collapse = " + "))),
+  death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -579,8 +570,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "any
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  as.formula(paste("death_year ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  death_year ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -610,8 +600,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -640,8 +629,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tbi
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  as.formula(paste("death_year ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  death_year ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -670,8 +658,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -701,8 +688,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tra
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  as.formula(paste("death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson +", 
-                   paste(comorbidities, collapse = " + "))),
+  death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )

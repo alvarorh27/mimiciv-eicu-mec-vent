@@ -206,7 +206,7 @@ final_dataset_eICU <- readRDS("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   inhospital_death ~ prolonged_mec_vent + age + sex + aps + charlson,
   data = final_dataset_eICU,
   family = binomial())
 
@@ -234,7 +234,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
 
@@ -262,7 +262,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "anytra
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
 
@@ -291,7 +291,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
  
@@ -319,7 +319,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "tbi_an
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * tbi_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   inhospital_death ~ prolonged_mec_vent * tbi_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
 
@@ -347,7 +347,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
  
@@ -376,7 +376,7 @@ final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson + metastasis + hiv + liver_cirrhosis + stroke + renal_disease + diabetes_disease + cancer + leukemia_disease + lymphoma_disease + myocardial_infarction + chf + pvd + tia + dementia + copd + ctd + pud + liver_disease,
+   inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
  

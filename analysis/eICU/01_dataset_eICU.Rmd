@@ -575,6 +575,7 @@ gg_miss_var(final_dataset_imputed, show_pct=TRUE)
 
 ```{r}
 saveRDS(final_dataset_imputed, file = "C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.rds")
+write.csv(final_dataset_imputed,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/eICU/final_dataset_eICU.csv', row.names = F)
 ```
 
 # Load File

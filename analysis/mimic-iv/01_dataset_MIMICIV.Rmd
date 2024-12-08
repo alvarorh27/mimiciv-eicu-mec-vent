@@ -553,6 +553,7 @@ cat(sprintf('%d patients remaining, with %d patients having missing gcs values.\
 final_dataset_df <- ungroup(final_dataset_excluded)
 
 saveRDS(final_dataset_df, file = "C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.rds")
+write.csv(final_dataset_df,'C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/data/mimic-iv/final_dataset_MIMICIV.csv', row.names = F)
 ```
 
 # Load File

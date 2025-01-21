@@ -84,12 +84,20 @@ dict_terms <- c(
   "trauma_type_anyseqsevere TBI" = "TBI severe",
   "trauma_type_anyseqnon-TBI trauma" = "non-TBI trauma",
   "trauma_type_anyseqnon-trauma" = "non-trauma",
-  "prolonged_mec_vent:trauma_type_anyseqsevere TBI" = "PMV + TBI non-severe",
-  "prolonged_mec_vent:trauma_type_anyseqnon-severe TBI" = "PMV + TBI severe",
+  "prolonged_mec_vent:trauma_type_anyseqsevere TBI" = "PMV + TBI severe",
+  "prolonged_mec_vent:trauma_type_anyseqnon-severe TBI" = "PMV + TBI non-severe",
   "prolonged_mec_vent:trauma_type_anyseqnon-TBI trauma" = "PMV + non-TBI trauma",
   "prolonged_mec_vent:trauma_type_anyseqnon-trauma" = "PMV + non-trauma",
-  "anytrauma_anyseq" = "Any Trauma", 
-  "prolonged_mec_vent:anytrauma_anyseq" = "PMV + Any Trauma",
+  "trauma_type3_anyseqnon-TBI trauma" = "non-TBI trauma",
+  "trauma_type3_anyseqnon-trauma" = "non-trauma",
+  "trauma_type3_anyseqTBI" = "TBI",
+  "prolonged_mec_vent:trauma_type3_anyseqnon-TBI trauma" = "PMV + non-TBI trauma",
+  "prolonged_mec_vent:trauma_type3_anyseqnon-trauma" = "PMV + non-trauma",
+  "prolonged_mec_vent:trauma_type3_anyseqTBI" = "PMV + TBI",
+  "anytrauma_anyseq0" = "non-trauma", 
+  "prolonged_mec_vent:anytrauma_anyseq0" = "PMV + non-trauma",
+  "anytrauma_anyseq1" = "Any Trauma", 
+  "prolonged_mec_vent:anytrauma_anyseq1" = "PMV + Any Trauma",
   "age" = "Age (years)",
   "sexM" = "Sex (male)",
   "apsiii" = "APSIII",
@@ -111,7 +119,7 @@ dict_terms <- c(
 
 ## Variable order in OR table
 variable_order <- c(
-  "Intercept", "Age (years)", "Sex (male)", "APSIII", "Charlson", "PMV", "non-trauma", "non-TBI trauma", "TBI non-severe", "TBI severe", "PMV + non-trauma", "PMV + non-TBI trauma", "PMV + TBI non-severe", "PMV + TBI severe", "PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")
+  "Intercept",  "PMV", "Age (years)", "Sex (male)", "APSIII", "Charlson", "non-trauma", "non-TBI trauma", "TBI", "TBI non-severe", "TBI severe", "PMV + non-trauma", "PMV + non-TBI trauma", "PMV + TBI", "PMV + TBI non-severe", "PMV + TBI severe")
 
 ## Variables for table output in console
 var_html <- c("term", "p.value", "OR","OR_lower","OR_upper")
@@ -219,13 +227,13 @@ or_hospdeath_PMV_allpopulation_mimiciv_univariate <- univariate_analysis(df=fina
 
 ```{r}
 # Multivariate analysis
-# Recategorize "non-trauma" as reference level in trauma_type_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "non-trauma")
+## Recategorize 0 (non-trauma) as reference level in anytrauma_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "anytrauma_anyseq", "0")
 
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -241,14 +249,14 @@ write.csv(or_2,file.path(root_dir,'data/mimic-iv/or_hospdeath_PMV-nontrauma_mimi
 htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 
 # Univariate analysis
-or_hospdeath_PMV_nontrauma_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="trauma_type_anyseq", output_name="PMV for non-Trauma")
+or_hospdeath_PMV_nontrauma_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="anytrauma_anyseq", output_name="PMV for non-Trauma")
 ```
 
 ## Traumatized
 
 ```{r}
 # Multivariate analysis
-## Recategorize 1 as reference level in anytrauma_anyseq variable
+## Recategorize 1 (trauma) as reference level in anytrauma_anyseq variable
 final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "anytrauma_anyseq", "1")
 
 ## Model
@@ -278,13 +286,13 @@ or_hospdeath_PMV_anytrauma_mimiciv_univariate <- univariate_analysis(df=final_da
 
 ```{r}
 # Multivariate Analysis
-## Recategorize "non-TBI trauma" as reference level in trauma_type_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "non-TBI trauma")
+## Recategorize "non-TBI trauma" as reference level in trauma_type3_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type3_anyseq", "non-TBI trauma")
 
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  inhospital_death ~ prolonged_mec_vent * trauma_type3_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -300,20 +308,20 @@ write.csv(or_2,file.path(root_dir,'data/mimic-iv/or_hospdeath_PMV-TraumanotTBI_m
 htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 
 # Univariate analysis
-or_hospdeath_PMV_traumanottbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="trauma_type_anyseq", output_name="PMV for Trauma not TBI")
+or_hospdeath_PMV_traumanottbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="trauma_type3_anyseq", output_name="PMV for Trauma not TBI")
 ```
 
 ## TBI
 
 ```{r}
 # Multivariate analysis
-## Recategorize 1 as reference level in tbi_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tbi_anyseq", "1")
+## Recategorize "TBI" as reference level in trauma_type3_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type3_anyseq", "TBI")
 
 ## Model
 print('Logistic Regression of hospital mortality')
 logreg <- glm(
-  inhospital_death ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson,
+  inhospital_death ~ prolonged_mec_vent * trauma_type3_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -329,7 +337,7 @@ write.csv(or_2,file.path(root_dir,'data/mimic-iv/or_hospdeath_PMV-tbi_mimiciv.cs
 htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 
 # Univariate analysis
-or_hospdeath_PMV_tbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="tbi_anyseq", output_name="PMV for TBI Patients")
+or_hospdeath_PMV_tbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="trauma_type3_anyseq", output_name="PMV for TBI Patients")
 ```
 
 ## tbi_non_severe
@@ -535,13 +543,13 @@ or_deathyear_PMV_allpopulation_mimiciv_univariate <- univariate_analysis(df=fina
 
 ```{r}
 # Multivariate analysis
-## Recategorize "non-trauma" as reference level in trauma_type_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "non-trauma")
+## Recategorize 0 (non-trauma) as reference level in anytrauma_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "anytrauma_anyseq", "0")
 
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  death_year ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -557,14 +565,14 @@ write.csv(or_2,file.path(root_dir,'data/mimic-iv/or_deathyear_PMV-nontrauma_mimi
 htmlTable(or_2[,var_html], caption = caption_deathyear_multivariable)
 
 # Univariate analysis
-or_deathyear_PMV_nontrauma_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="death_year", df_column="trauma_type_anyseq", output_name="PMV for non-Trauma")
+or_deathyear_PMV_nontrauma_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="death_year", df_column="anytrauma_anyseq", output_name="PMV for non-Trauma")
 ```
 
 ## Traumatized
 
 ```{r}
 # Multivariate analysis
-## Recategorize 1 as reference level in anytrauma_anyseq variable
+## Recategorize 1 (trauma) as reference level in anytrauma_anyseq variable
 final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "anytrauma_anyseq", "1")
 
 ## Model
@@ -594,13 +602,13 @@ or_deathyear_PMV_anytrauma_mimiciv_univariate <- univariate_analysis(df=final_da
 
 ```{r}
 # Multivariate Analysis
-## Recategorize "non-TBI trauma" as reference level in trauma_type_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type_anyseq", "non-TBI trauma")
+## Recategorize "non-TBI trauma" as reference level in trauma_type3_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type3_anyseq", "non-TBI trauma")
 
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  death_year ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + apsiii + charlson,
+  death_year ~ prolonged_mec_vent * trauma_type3_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -616,20 +624,20 @@ write.csv(or_2,file.path(root_dir,'data/mimic-iv/or_deathyear_PMV-TraumanotTBI_m
 htmlTable(or_2[,var_html], caption = caption_deathyear_multivariable)
 
 # Univariate analysis
-or_deathyear_PMV_traumanottbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="death_year", df_column="trauma_type_anyseq", output_name="PMV for Trauma not TBI")
+or_deathyear_PMV_traumanottbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="death_year", df_column="trauma_type3_anyseq", output_name="PMV for Trauma not TBI")
 ```
 
 ## TBI
 
 ```{r}
 # Multivariate analysis
-## Recategorize 1 as reference level in tbi_anyseq variable
-final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "tbi_anyseq", "1")
+## Recategorize "TBI" as reference level in trauma_type3_anyseq variable
+final_dataset_recategorized <- recategorize_function(final_dataset_MIMICIV, "trauma_type3_anyseq", "TBI")
 
 ## Model
 print('Logistic Regression of mortality at 1 year')
 logreg <- glm(
-  death_year ~ prolonged_mec_vent * tbi_anyseq + age + sex + apsiii + charlson,
+  death_year ~ prolonged_mec_vent * trauma_type3_anyseq + age + sex + apsiii + charlson,
   data = final_dataset_recategorized,
   family = binomial()
 )
@@ -645,7 +653,7 @@ write.csv(or_2,file.path(root_dir,'data/mimic-iv/or_deathyear_PMV-tbi_mimiciv.cs
 htmlTable(or_2[,var_html], caption = caption_deathyear_multivariable)
 
 # Univariate analysis
-or_deathyear_PMV_tbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, df_column="tbi_anyseq", death_outcome="death_year", output_name="PMV for TBI Patients")
+or_deathyear_PMV_tbi_mimiciv_univariate <- univariate_analysis(df=final_dataset_recategorized, df_column="trauma_type3_anyseq", death_outcome="death_year", output_name="PMV for TBI Patients")
 ```
 
 ## tbi_non_severe
@@ -770,6 +778,7 @@ fp_PMV_alltraumas_deathyear_mimiciv
 ggsave(file.path(root_dir, 'figures/mimic-iv/Forest_plot/fp_deathyear_PMV_all-trauma_mimiciv.png'), plot=fp_PMV_alltraumas_deathyear_mimiciv, width = 10, height = 4, dpi = 300)
 
 ```
+
 ### Univariate Analysis
 
 ```{r}
@@ -818,7 +827,3 @@ rownames(deathyear_counts_summary) <- NULL
 write.csv(deathyear_counts_summary,file.path(root_dir,'data/mimic-iv/deathyear_counts_summary_mimiciv.csv'))
 htmlTable(deathyear_counts_summary, caption = "Counts and percentages of different subgroups. MIMIC-IV Database")
 ```
-
-
-
-

@@ -425,7 +425,7 @@ MIMICIV_or_hospdeath_PMV_multivariate_2 <- or_transformation(MIMICIV_or_hospdeat
 # Order and select OR table for building Forest Plot
 MIMICIV_or_hospdeath_PMV_multivariate_3 <- MIMICIV_or_hospdeath_PMV_multivariate_2 %>% 
   filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")) %>% 
-  mutate(term = factor(term, levels = variable_order)) %>%
+  mutate(term = factor(term, levels = c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma"))) %>%
   arrange(term)
 
 # Create a data frame with all possible levels for adverse-protective-inconclusive variable
@@ -741,7 +741,7 @@ MIMICIV_or_deathyear_PMV_multivariate_2 <- or_transformation(MIMICIV_or_deathyea
 # Order and select OR table for building Forest Plot
 MIMICIV_or_deathyear_PMV_multivariate_3 <- MIMICIV_or_deathyear_PMV_multivariate_2 %>% 
   filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")) %>% 
-  mutate(term = factor(term, levels = variable_order)) %>%
+  mutate(term = factor(term, levels = c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma"))) %>%
   arrange(term)
 
 # Create a data frame with all possible levels for adverse-protective-inconclusive variable

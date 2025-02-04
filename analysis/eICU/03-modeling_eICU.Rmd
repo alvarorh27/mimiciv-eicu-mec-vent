@@ -428,7 +428,7 @@ eICU_or_hospdeath_PMV_multivariate_2 <- or_transformation(eICU_or_hospdeath_PMV_
 # Order and select OR table for building Forest Plot
 eICU_or_hospdeath_PMV_multivariate_3 <- eICU_or_hospdeath_PMV_multivariate_2 %>% 
   filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")) %>% 
-  mutate(term = factor(term, levels = variable_order)) %>%
+  mutate(term = factor(term, levels = c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma"))) %>%
   arrange(term)
 
 # Create a data frame with all possible levels for adverse-protective-inconclusive variable
@@ -440,7 +440,7 @@ fp_PMV_alltraumas_hospdeath_eICU <- ggplot(eICU_or_hospdeath_PMV_multivariate_3,
   geom_point(size = 2, aes(color = adverse_protective)) +
   geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
   geom_vline(xintercept = 1, linetype = "dashed") +
-  labs(x = "Odds Ratio", y = NULL, title = "b. eICU. Outcome: Hospital Mortality") +
+  labs(x = "Odds Ratio", y = NULL, title = "c. eICU. Outcome: Hospital Mortality") +
   theme_minimal() +
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),

@@ -152,13 +152,6 @@ table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, fac
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No", "Yes", "", ""))
 
-# # Export kable 
-#   table1_tbi %>%
-#    kbl(caption = "Table 1 of base model: Traumatic Brain Injury. eICU Database" , align = "c") %>%
-#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-#    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_eicu.jpg", zoom = 10)
-
 ```
 
 # Table one: Hospital Mortality 
@@ -211,13 +204,6 @@ create_flextable(
   title = "Baseline characteristics of eICU study population stratified by Hospital Mortality",
   save_name = "table1_hospdeath_eICU"
 )
- 
-# # Export kable
-#  table1 %>%
-#    kbl(caption = "Table 1 of base model: Hospital Mortality eICU Database" , align = "c") %>%
-#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-#    add_header_above(c("", "", "No", "Yes", "", "")) %>%
-#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_hospdeath_eicu.jpg", zoom = 10)
  
 ```
 
@@ -272,12 +258,6 @@ create_flextable(
   save_name = "table1_PMV_eICU"
 )
  
-# #Export kable
-#  table1 %>%  
-#    kbl(caption = "Table 1 of base model: Prolonged Mechanical Ventilation. eICU Database" , align = "c") %>%
-#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-#    add_header_above(c("", "", "No", "Yes", "", "")) %>% 
-#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_pmv_eicu.jpg", zoom = 10)
 ```
 
 
@@ -331,12 +311,6 @@ create_flextable(
   save_name = "table1_trauma_eICU"
 )
  
-# # Export kable
-#  table1 %>%
-#    kbl(caption = "Table 1 of base model: Table 1 of base model: Trauma types. eICU Database" ,     align = "c") %>%
-#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-#    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
-#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_and_pmv_eicu.jpg", zoom = 10)
 ```
 
 # Table one: severe TBI and hospital mortality
@@ -387,12 +361,6 @@ table1 <- print(
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "Hospital Mortality"=2, "", ""))
  
-# # Export kable
-#  table1 %>%
-#    kbl(caption = "Table 1 of base model: non-TBI Trauma VS Prolonged Mechanical Ventilation. eICU Database" ,     align = "c") %>%
-#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-#    add_header_above(c("", "", "Non-TBI Trauma"=2, "", "")) %>%
-#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_severetbi&hospdeath_eICU.jpg", zoom = 10)
 ```
 
 # Table one: TBI and PMV
@@ -434,61 +402,95 @@ table1_tbi_and_pmv<-print(CreateTableOne(vars = vars_in_table1, strata = stratif
    kable_classic_2(full_width = F, html_font = "Cambria") %>%
    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " "))
  
-# # Export kable
-#  table1_tbi_and_pmv %>%
-#    kbl(caption = "Table 1 of base model: Traumatic Brain Injury VS Prolonged Mechanical Ventilation. eICU Database" ,     align = "c") %>%
-#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-#    add_header_above(c("", "", "No TBI and no Mec Vent", "TBI without Mec Vent", "No TBI and Mec Vent",     "TBI + Mec-Vent ", " ", " ")) %>%
-#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_tbi_and_pmv_eicu.jpg", zoom = 10)
 ```
 
-# Table one: Subset of TBI and PMV
+# Function to obtain subset table 1
 
 ```{r}
-# Subset table with only patients with traumatic bran injury
-table1_dataset <- final_dataset_eICU %>% 
-  filter(tbi_anyseq==1 & prolonged_mec_vent==1)
+generate_table1_subset <- function(subset_filter, title, save_name) {
+  # Subset table
+  table1_dataset <- final_dataset_eICU %>%
+    filter(trauma_type_anyseq==subset_filter)
 
-# Lists the variables we are going to be including in table1 (except for the stratification variable)
-vars_in_table1<-c('age', 'sex', 'hospital_stay_days', 'icu_stay_days', 'inhospital_death', 'inicu_death', 'death_30days', 'tbi_severe_anyseq', 'consecutive_vm_days', 'mv_consecutive_7days', 'mv_consecutive_14days', 'mv_consecutive_21days', 'total_vm_days', 'mv_total_7days', 'mv_total_14days', 'mv_total_21days', 'mv_96traq', 'prolonged_mec_vent', 'aps', 'apache', 'charlson', 'gcs') 
+  # Variables to include in Table 1
+  vars_in_table1 <- c('age', 'icu_stay_days', 'inhospital_death', 'aps', 'charlson')
+  stratifyby <- "prolonged_mec_vent"
+  
+  # Subset only needed columns
+  table1_dataset <- table1_dataset[, c(vars_in_table1, stratifyby)]
+  table1_dataset$prolonged_mec_vent <- factor(table1_dataset$prolonged_mec_vent, labels = c("No", "Yes"))
 
-# Creates a dataset with only selected variables using our original dataset and generates an empty list for storing categorical variables
-table1_dataset <- table1_dataset[,vars_in_table1] 
-cat_variables <- rep(NA, length(vars_in_table1))
+  # Assign labels
+  table1_dataset <- assign_labels(vars_in_table1, table1_dataset, labels_list)
 
-# Detects whether a variable is categorical or not
-cont <- 1
-for (i in 1:length(vars_in_table1) ) {
-  if ( n_distinct(table1_dataset[vars_in_table1[i] ])<=10 ) {
-    print(i)
-    print(vars_in_table1[i])
-    print(names(table1_dataset[vars_in_table1[i]]))
-    cat_variables[cont]<-names(table1_dataset[vars_in_table1[i]])
-    cont<-cont+1
-  }
+  # Detect categorical variables
+  cat_variables <- detect_categorical(vars_in_table1, table1_dataset)
+  cat_variables <- cat_variables[!is.na(cat_variables)]
+
+  # Create Table 1
+  table1 <- print(
+    CreateTableOne(
+      vars = vars_in_table1,
+      strata = stratifyby,
+      factorVars = cat_variables,
+      data = table1_dataset,
+      addOverall = TRUE
+    ),
+    nonnormal = nonnormal_variables,
+    formatOptions = list(big.mark = ","),
+    varLabels = TRUE
+  )
+
+  # Print in console
+  table1_html <- table1 %>%
+    kbl(caption = title, align = "c") %>%
+    kable_classic_2(full_width = FALSE, html_font = "Cambria") %>%
+    add_header_above(c("", "", "PMV" = 2, "", ""))
+  print(table1_html)
+
+  # Save in .docx with custom flextable function
+  create_flextable(
+    table1 = table1,
+    values = c("", "", "PMV", ""),
+    colwidths = c(1, 1, 2, 1),
+    title = title,
+    save_name = save_name
+  )
 }
+```
 
-# Establishes the stratification variables and eliminates null values from 'cat_variables'
-stratifyby <- c("tbi_severe_anyseq")
-cat_variables<-cat_variables[!is.na(cat_variables)]
+## Table one: Subset of non-trauma by PMV
+```{r}
+generate_table1_subset(
+  subset_filter = "non-trauma",
+  title = "Baseline characteristics of the eICU non-trauma patient subset, stratified by PMV status",
+  save_name = "table1_subset_nontrauma_pmv"
+)
+```
 
-# Creates table one
-table1_tbi<-print(CreateTableOne(vars = vars_in_table1, strata = stratifyby, factorVars = cat_variables, data = table1_dataset, addOverall=T),varLabels = T)
+## Table one: Subset of non-TBI trauma by PMV
+```{r}
+generate_table1_subset(
+  subset_filter = "non-TBI trauma",
+  title = "Baseline characteristics of the eICU non-TBI trauma patient subset, stratified by PMV status",
+  save_name = "table1_subset_nonTBItrauma_pmv"
+)
+```
 
-# Run this in console for html output, the code below uses kableExtra::
- starification_cats<-n_distinct(table1_dataset[,stratifyby])
- 
-# For console
- table1_tbi %>%
-   kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV. eICU Database" , align = "c") %>%
-   kable_classic_2(full_width = F, html_font = "Cambria") %>%
-   add_header_above(c("", "", "Non-severe TBI", "Severe TBI", "", ""))
+## Table one: Subset of non-severe TBI by PMV
+```{r}
+generate_table1_subset(
+  subset_filter = "non-severe TBI",
+  title = "Baseline characteristics of the eICU non-severe TBI patient subset, stratified by PMV status",
+  save_name = "table1_subset_nonsevereTBI_pmv"
+)
+```
 
-# # Export kable 
-#   table1_tbi %>%
-#    kbl(caption = "Table 1 of base model: Subset of Patients with TBI and PMV. eICU Database" , align = "c") %>%
-#    kable_classic_2(full_width = F, html_font = "Cambria") %>%
-#    add_header_above(c("", "", "Non-severe TBI", "Severe TBI", "", "")) %>%
-#    save_kable("C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent/figures/eICU/Table1/table1_subset_tbi-pmv_eicu.jpg", zoom = 10)
-
+## Table one: Subset of severe TBI by PMV
+```{r}
+generate_table1_subset(
+  subset_filter = "severe TBI",
+  title = "Baseline characteristics of the eICU severe TBI patient subset, stratified by PMV status",
+  save_name = "table1_subset_severeTBI_pmv"
+)
 ```

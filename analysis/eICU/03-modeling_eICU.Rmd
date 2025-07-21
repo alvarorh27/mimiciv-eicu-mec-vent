@@ -58,13 +58,13 @@ or_transformation <- function(df, custom_terms, variable_index) {
         TRUE ~ coalesce(custom_terms[term], term)  # Custom terms mapping or keep original
       ),
       adverse_protective = case_when(
-        OR_lower > 1 & OR_upper > 1 ~ "Adverse",
-        OR_lower < 1 & OR_upper < 1 ~ "Protective",
+        OR_lower > 1 & OR_upper > 1 ~ "Positive Association",
+        OR_lower < 1 & OR_upper < 1 ~ "Negative Association",
         TRUE ~ "Inconclusive"
       ),
       adverse_protective = factor(
         adverse_protective,
-        levels = c("Adverse", "Protective", "Inconclusive")
+        levels = c("Positive Association", "Negative Association", "Inconclusive")
       )
     ) %>%
     arrange(match(term, variable_index)) %>%
@@ -432,7 +432,7 @@ eICU_or_hospdeath_PMV_multivariate_3 <- eICU_or_hospdeath_PMV_multivariate_2 %>%
   arrange(term)
 
 # Create a data frame with all possible levels for adverse-protective-inconclusive variable
-adverse_protective_levels <- data.frame(adverse_protective = c("Adverse", "Protective", "Inconclusive"))
+adverse_protective_levels <- data.frame(adverse_protective = c("Positive Association", "Negative Association", "Inconclusive"))
 
 # Build the Forest plot
 fp_PMV_alltraumas_hospdeath_eICU <- ggplot(eICU_or_hospdeath_PMV_multivariate_3, 
@@ -444,7 +444,7 @@ fp_PMV_alltraumas_hospdeath_eICU <- ggplot(eICU_or_hospdeath_PMV_multivariate_3,
   theme_minimal() +
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),
-    labels = c("Adverse", "Protective", "Inconclusive"),
+    labels = c("Positive Association", "Negative Association", "Inconclusive"),
     name = "Effect on Outcome", 
     limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
   scale_x_continuous(limits = c(0, 6)) +

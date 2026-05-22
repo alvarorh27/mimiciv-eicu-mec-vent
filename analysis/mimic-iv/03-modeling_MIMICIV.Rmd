@@ -827,3 +827,758 @@ rownames(deathyear_counts_summary) <- NULL
 write.csv(deathyear_counts_summary,file.path(root_dir,'data/mimic-iv/deathyear_counts_summary_mimiciv.csv'))
 htmlTable(deathyear_counts_summary, caption = "Counts and percentages of different subgroups. MIMIC-IV Database")
 ```
+
+# Propensity Score Matching
+
+## PSM
+```{r}
+# ============================================================
+# PROPENSITY SCORE MATCHING (PSM) - SENSITIVITY ANALYSIS
+Addresses reviewers #2 and #3 concern about survivorship bias
+# and baseline imbalance between PMV and non-PMV groups.
+#
+# Strategy: within each trauma subgroup, match each PMV patient
+# to the most similar non-PMV patient by propensity score,
+# then re-estimate the OR of PMV on mortality in the matched sample.
+#
+# Limitation (must be acknowledged in manuscript):
+# PSM balances observed baseline covariates but does NOT resolve
+# the structural survivorship bias: patients dying before day 14
+# can never be classified as PMV, regardless of matching.
+# ============================================================
+
+library(MatchIt)
+library(cobalt)
+library(sandwich)
+library(lmtest)
+library(dplyr)
+library(ggplot2)
+library(htmlTable)
+
+# ============================================================
+# MAIN PSM FUNCTION
+#
+# Arguments:
+#   df            : dataset filtered to one trauma subgroup
+#   death_outcome : outcome variable ("inhospital_death" or "death_year")
+#   group_label   : subgroup label for outputs and filenames
+#   covariates    : baseline covariates used to estimate the PS
+#   ratio         : matching ratio (1 = 1:1)
+#   caliper       : caliper width in SD of logit(PS); 0.2 per Austin 2011
+#   root_dir      : project root directory for saving outputs
+#
+# Internal steps:
+#   1. Estimate PS via logistic regression: P(PMV=1 | covariates)
+#   2. Nearest-neighbor 1:1 matching without replacement + caliper
+#   3. Extract matched dataset and evaluate covariate balance (SMD)
+#   4. Fit logistic regression on matched sample with clustered SE
+#      (pairs are not independent, so SE must be clustered by pair)
+#   5. Return list: match object, OR table, balance table, love plot
+# ============================================================
+
+run_psm_analysis <- function(df,
+                             death_outcome,
+                             group_label,
+                             covariates = c("age", "sex", "apsiii", "charlson"),
+                             ratio      = 1,
+                             caliper    = 0.2,
+                             root_dir) {
+
+  cat(sprintf("\n========== PSM: %s | Outcome: %s ==========\n",
+              group_label, death_outcome))
+
+  # --- 0. Check minimum n in both groups ---
+  n_pmv   <- sum(df$prolonged_mec_vent == 1, na.rm = TRUE)
+  n_nopmv <- sum(df$prolonged_mec_vent == 0, na.rm = TRUE)
+  cat(sprintf("Pre-matching: PMV = %d, no-PMV = %d\n", n_pmv, n_nopmv))
+
+  if (n_pmv < 10 || n_nopmv < 10) {
+    warning(sprintf(
+      "Group '%s': insufficient n for PSM (PMV=%d, no-PMV=%d). Skipping.",
+      group_label, n_pmv, n_nopmv))
+    return(NULL)
+  }
+
+  # --- 0b. Check minimum events in both groups (pre-matching) ---
+  n_events_pmv   <- sum(df[[death_outcome]][df$prolonged_mec_vent == 1], na.rm = TRUE)
+  n_events_nopmv <- sum(df[[death_outcome]][df$prolonged_mec_vent == 0], na.rm = TRUE)
+  cat(sprintf("Events (pre-matching): PMV = %d, no-PMV = %d\n", n_events_pmv, n_events_nopmv))
+
+  if (n_events_pmv < 5 || n_events_nopmv < 5) {
+    warning(sprintf(
+      "Group '%s': insufficient events for PSM (events PMV=%d, no-PMV=%d). Skipping.",
+      group_label, n_events_pmv, n_events_nopmv))
+    return(NULL)
+  }
+
+  # --- 1. Propensity score formula ---
+  ps_formula <- as.formula(
+    paste("prolonged_mec_vent ~", paste(covariates, collapse = " + "))
+  )
+
+  # --- 2. Nearest-neighbor 1:1 matching with caliper ---
+  # method = "nearest"  : greedy nearest-neighbor matching
+  # distance = "glm"    : PS estimated via logistic regression
+  # link = "logit"      : caliper applied on logit(PS) scale
+  # replace = FALSE     : no replacement (each control used once)
+  # ratio = 1           : one control per treated unit
+  # caliper = 0.2       : max allowed distance = 0.2 SD of logit(PS)
+  # std.caliper = TRUE  : caliper expressed in SD units
+  match_obj <- matchit(
+    formula     = ps_formula,
+    data        = df,
+    method      = "nearest",
+    distance    = "glm",
+    link        = "logit",
+    replace     = FALSE,
+    ratio       = ratio,
+    caliper     = caliper,
+    std.caliper = TRUE
+  )
+
+  # --- 3. Extract matched dataset ---
+  # Sample sizes derived from matched dataset directly
+  # (more robust across MatchIt versions than indexing match_obj$nn by name)
+  matched_df  <- match.data(match_obj)
+  n_matched   <- as.integer(sum(matched_df$prolonged_mec_vent == 1))
+  n_unmatched <- as.integer(n_pmv - n_matched)
+  cat(sprintf("Post-matching: %d pairs formed | PMV unmatched: %d\n",
+              n_matched, n_unmatched))
+
+  # --- 3b. Check events in matched sample ---
+  n_events_pmv_matched   <- sum(matched_df[[death_outcome]][matched_df$prolonged_mec_vent == 1],
+                                na.rm = TRUE)
+  n_events_nopmv_matched <- sum(matched_df[[death_outcome]][matched_df$prolonged_mec_vent == 0],
+                                na.rm = TRUE)
+  cat(sprintf("Events (post-matching): PMV = %d, no-PMV = %d\n",
+              n_events_pmv_matched, n_events_nopmv_matched))
+
+  if (n_events_pmv_matched < 5 || n_events_nopmv_matched < 5) {
+    warning(sprintf(
+      "Group '%s': insufficient events in matched sample (PMV=%d, no-PMV=%d). Skipping.",
+      group_label, n_events_pmv_matched, n_events_nopmv_matched))
+    return(NULL)
+  }
+
+  # --- 4. Covariate balance: SMD before and after matching ---
+  # |SMD| < 0.1 is considered adequate balance (Austin 2009)
+  balance_obj <- summary(match_obj, standardize = TRUE)
+
+  smd_before <- as.data.frame(balance_obj$sum.all)[,     "Std. Mean Diff.", drop = FALSE]
+  smd_after  <- as.data.frame(balance_obj$sum.matched)[, "Std. Mean Diff.", drop = FALSE]
+
+  smd_table <- data.frame(
+    variable   = rownames(smd_before),
+    SMD_before = round(smd_before[, 1], 3),
+    SMD_after  = round(smd_after[,  1], 3),
+    balanced   = abs(smd_after[, 1]) < 0.1,
+    stringsAsFactors = FALSE
+  )
+  rownames(smd_table) <- NULL
+
+  cat("Covariate balance (|SMD| < 0.1 = adequate):\n")
+  print(smd_table)
+
+  # --- 5. Logistic regression on matched sample ---
+  # Covariates included alongside PMV (doubly robust approach):
+  # matching removes gross imbalance; regression removes residual confounding.
+  # SE are clustered by matching pair (subclass) because pairs share
+  # information and are not independent observations.
+  outcome_formula <- as.formula(
+    paste(death_outcome, "~ prolonged_mec_vent +",
+          paste(covariates, collapse = " + "))
+  )
+
+  model_matched <- glm(
+    formula = outcome_formula,
+    data    = matched_df,
+    family  = binomial(),
+    weights = matched_df$weights
+  )
+
+  robust_vcov    <- vcovCL(model_matched, cluster = ~subclass, type = "HC3")
+  robust_results <- coeftest(model_matched, vcov = robust_vcov)
+
+  # --- 6. Build OR table from robust results ---
+  coef_names <- rownames(robust_results)
+  estimates  <- robust_results[, "Estimate"]
+  se_robust  <- robust_results[, "Std. Error"]
+  pvals      <- robust_results[, "Pr(>|z|)"]
+
+  or_psm_full <- data.frame(
+    term     = coef_names,
+    OR       = round(exp(estimates),                    2),
+    OR_lower = round(exp(estimates - 1.96 * se_robust), 2),
+    OR_upper = round(exp(estimates + 1.96 * se_robust), 2),
+    p.value  = round(pvals, 4),
+    stringsAsFactors = FALSE
+  )
+  rownames(or_psm_full) <- NULL
+
+  # --- 7. Extract PMV row and annotate with group metadata ---
+  pmv_row_index <- which(or_psm_full$term == "prolonged_mec_vent")
+
+  if (length(pmv_row_index) == 0) {
+    warning(sprintf("Group '%s': 'prolonged_mec_vent' not found in model coefficients.",
+                    group_label))
+    or_pmv_row <- data.frame(
+      group           = group_label,
+      outcome         = death_outcome,
+      n_pairs         = n_matched,
+      n_pmv_unmatched = n_unmatched,
+      OR              = NA_real_,
+      OR_lower        = NA_real_,
+      OR_upper        = NA_real_,
+      p.value         = NA_real_,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    or_pmv_row <- data.frame(
+      group           = group_label,
+      outcome         = death_outcome,
+      n_pairs         = n_matched,
+      n_pmv_unmatched = n_unmatched,
+      OR              = or_psm_full$OR[pmv_row_index],
+      OR_lower        = or_psm_full$OR_lower[pmv_row_index],
+      OR_upper        = or_psm_full$OR_upper[pmv_row_index],
+      p.value         = or_psm_full$p.value[pmv_row_index],
+      stringsAsFactors = FALSE
+    )
+  }
+
+  cat(sprintf(
+    "\nOR for PMV on %s in matched sample (%s):\n  OR = %.2f [%.2f-%.2f], p = %.4f | pairs = %d\n",
+    death_outcome, group_label,
+    or_pmv_row$OR, or_pmv_row$OR_lower, or_pmv_row$OR_upper,
+    or_pmv_row$p.value, n_matched))
+
+  # --- 8. Love plot: visual covariate balance check ---
+  # binary = "std" standardizes binary variables for consistent SMD scale
+  love_plot <- cobalt::love.plot(
+    match_obj,
+    stats      = "mean.diffs",
+    thresholds = c(m = 0.1),
+    abs        = TRUE,
+    binary     = "std",
+    title      = sprintf("Covariate Balance: %s", group_label),
+    colors     = c("red3", "steelblue"),
+    shapes     = c("triangle", "circle"),
+    labels     = TRUE
+  )
+
+  # --- 9. Save outputs ---
+  safe_label <- gsub("[^a-z0-9]", "_", tolower(group_label))
+
+  write.csv(
+    smd_table,
+    file.path(root_dir, sprintf("data/mimic-iv/psm_balance_%s_%s.csv",
+                                safe_label, death_outcome)),
+    row.names = FALSE)
+
+  write.csv(
+    or_psm_full,
+    file.path(root_dir, sprintf("data/mimic-iv/psm_or_full_%s_%s.csv",
+                                safe_label, death_outcome)),
+    row.names = FALSE)
+
+  ggsave(
+    file.path(root_dir, sprintf("figures/mimic-iv/PSM/loveplot_%s_%s.png",
+                                safe_label, death_outcome)),
+    plot = love_plot, width = 7, height = 4, dpi = 300)
+
+  # --- 10. Return all objects ---
+  return(list(
+    match_obj       = match_obj,
+    matched_df      = matched_df,
+    smd_table       = smd_table,
+    or_psm_full     = or_psm_full,
+    or_pmv          = or_pmv_row,
+    love_plot       = love_plot,
+    n_pairs         = n_matched,
+    n_pmv_unmatched = n_unmatched
+  ))
+}
+
+
+# ============================================================
+# PRE-MATCHING DIAGNOSTIC
+# Inspect n and event counts per subgroup before running PSM
+# ============================================================
+
+for (sg in c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")) {
+  df_sg <- final_dataset_MIMICIV %>% filter(trauma_type_anyseq == sg)
+  cat("\n---", sg, "---\n")
+  cat("PMV:                    ", sum(df_sg$prolonged_mec_vent == 1,                           na.rm = TRUE), "\n")
+  cat("no-PMV:                 ", sum(df_sg$prolonged_mec_vent == 0,                           na.rm = TRUE), "\n")
+  cat("Hospital deaths in PMV: ", sum(df_sg$inhospital_death[df_sg$prolonged_mec_vent == 1],   na.rm = TRUE), "\n")
+  cat("1-year deaths in PMV:   ", sum(df_sg$death_year[df_sg$prolonged_mec_vent == 1],         na.rm = TRUE), "\n")
+}
+
+
+# ============================================================
+# FILTER SUBGROUPS
+# ============================================================
+
+df_nontrauma    <- final_dataset_MIMICIV %>% filter(trauma_type_anyseq == "non-trauma")
+df_nontbi       <- final_dataset_MIMICIV %>% filter(trauma_type_anyseq == "non-TBI trauma")
+df_nonseveretbi <- final_dataset_MIMICIV %>% filter(trauma_type_anyseq == "non-severe TBI")
+df_severetbi    <- final_dataset_MIMICIV %>% filter(trauma_type_anyseq == "severe TBI")
+
+
+# ============================================================
+# EXECUTION: PSM per subgroup and outcome
+# ============================================================
+
+# --- Hospital mortality ---
+psm_hospdeath_nontrauma    <- run_psm_analysis(df_nontrauma,    "inhospital_death", "non-trauma",     root_dir = root_dir)
+psm_hospdeath_nontbi       <- run_psm_analysis(df_nontbi,       "inhospital_death", "non-TBI trauma", root_dir = root_dir)
+psm_hospdeath_nonseveretbi <- run_psm_analysis(df_nonseveretbi, "inhospital_death", "non-severe TBI", root_dir = root_dir)
+psm_hospdeath_severetbi    <- run_psm_analysis(df_severetbi,    "inhospital_death", "severe TBI",     root_dir = root_dir)
+
+# --- 1-year mortality (primary outcome) ---
+psm_deathyear_nontrauma    <- run_psm_analysis(df_nontrauma,    "death_year", "non-trauma",     root_dir = root_dir)
+psm_deathyear_nontbi       <- run_psm_analysis(df_nontbi,       "death_year", "non-TBI trauma", root_dir = root_dir)
+psm_deathyear_nonseveretbi <- run_psm_analysis(df_nonseveretbi, "death_year", "non-severe TBI", root_dir = root_dir)
+psm_deathyear_severetbi    <- run_psm_analysis(df_severetbi,    "death_year", "severe TBI",     root_dir = root_dir)
+
+
+# ============================================================
+# SUMMARY TABLE: PSM vs original multivariable analysis
+# Intended for supplementary material
+#
+# NOTE: the or_*_mimiciv_multivariate objects below must exist
+# in the environment from the main modeling section of this script.
+# ============================================================
+
+build_comparison_table <- function(psm_list,
+                                   original_or_list,
+                                   group_labels,
+                                   death_outcome,
+                                   root_dir) {
+
+  # Collect PSM rows
+  psm_rows <- bind_rows(lapply(psm_list, function(x) {
+    if (is.null(x)) return(NULL)
+    x$or_pmv
+  })) %>%
+    mutate(
+      analysis = "PSM (matched)",
+      OR_CI    = sprintf("%.2f [%.2f\u2013%.2f]", OR, OR_lower, OR_upper)
+    )
+
+  # Collect original multivariable rows
+  original_rows <- bind_rows(mapply(function(df_or, label) {
+    data.frame(
+      group           = label,
+      outcome         = death_outcome,
+      n_pairs         = NA_integer_,
+      n_pmv_unmatched = NA_integer_,
+      OR              = df_or$OR,
+      OR_lower        = df_or$OR_lower,
+      OR_upper        = df_or$OR_upper,
+      p.value         = df_or$p.value,
+      analysis        = "Multivariable (original)",
+      OR_CI           = sprintf("%.2f [%.2f\u2013%.2f]",
+                                df_or$OR, df_or$OR_lower, df_or$OR_upper),
+      stringsAsFactors = FALSE
+    )
+  }, original_or_list, group_labels, SIMPLIFY = FALSE))
+
+  # Combine, arrange, and select columns for presentation
+  comparison <- bind_rows(original_rows, psm_rows) %>%
+    arrange(group, analysis) %>%
+    select(group, analysis, n_pairs, OR_CI, p.value)
+
+  # Print to console
+  cat(sprintf("\n========== Comparison table: %s ==========\n", death_outcome))
+  print(comparison, row.names = FALSE)
+
+  # HTML output for RMarkdown / Viewer
+  htmlTable(
+    comparison,
+    caption = sprintf(
+      "Sensitivity analysis: Multivariable vs PSM \u2014 OR for PMV on %s. MIMIC-IV",
+      death_outcome))
+
+  # Save to disk
+  write.csv(
+    comparison,
+    file.path(root_dir, sprintf("data/mimic-iv/psm_vs_multivariable_%s.csv", death_outcome)),
+    row.names = FALSE)
+
+  return(invisible(comparison))
+}
+
+
+# --- 1-year mortality ---
+comparison_deathyear <- build_comparison_table(
+  psm_list = list(
+    psm_deathyear_nontrauma,
+    psm_deathyear_nontbi,
+    psm_deathyear_nonseveretbi,
+    psm_deathyear_severetbi
+  ),
+  original_or_list = list(
+    or_deathyear_PMV_nontrauma_mimiciv_multivariate,
+    or_deathyear_PMV_traumanontbi_mimiciv_multivariate,
+    or_deathyear_PMV_tbinonsevere_mimiciv_multivariate,
+    or_deathyear_PMV_tbisevere_mimiciv_multivariate
+  ),
+  group_labels  = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI"),
+  death_outcome = "death_year",
+  root_dir      = root_dir
+)
+
+# --- Hospital mortality ---
+comparison_hospdeath <- build_comparison_table(
+  psm_list = list(
+    psm_hospdeath_nontrauma,
+    psm_hospdeath_nontbi,
+    psm_hospdeath_nonseveretbi,
+    psm_hospdeath_severetbi
+  ),
+  original_or_list = list(
+    or_hospdeath_PMV_nontrauma_mimiciv_multivariate,
+    or_hospdeath_PMV_traumanontbi_mimiciv_multivariate,
+    or_hospdeath_PMV_tbinonsevere_mimiciv_multivariate,
+    or_hospdeath_PMV_tbisevere_mimiciv_multivariate
+  ),
+  group_labels  = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI"),
+  death_outcome = "inhospital_death",
+  root_dir      = root_dir
+)
+
+```
+
+## Comparative table
+```{r}
+# ============================================================
+# SUMMARY TABLE: Multivariable vs PSM with confidence intervals
+# Groups ordered as: non-trauma, non-TBI trauma, non-severe TBI, severe TBI
+# ============================================================
+
+build_comparison_table_with_ci <- function(psm_list,
+                                           original_or_list,
+                                           group_labels,
+                                           death_outcome,
+                                           root_dir) {
+  
+  # Collect PSM rows
+  psm_rows <- bind_rows(lapply(psm_list, function(x) {
+    if (is.null(x)) return(NULL)
+    x$or_pmv %>%
+      mutate(
+        analysis = "PSM (matched)",
+        OR_CI    = sprintf("%.2f [%.2f\u2013%.2f]", OR, OR_lower, OR_upper),
+        p_fmt    = ifelse(p.value < 0.001, "<0.001", sprintf("%.3f", p.value))
+      )
+  }))
+  
+  # Collect original multivariable rows
+  original_rows <- bind_rows(mapply(function(df_or, label) {
+    pval <- df_or$p.value
+    data.frame(
+      group           = label,
+      outcome         = death_outcome,
+      n_pairs         = NA_integer_,
+      n_pmv_unmatched = NA_integer_,
+      OR              = df_or$OR,
+      OR_lower        = df_or$OR_lower,
+      OR_upper        = df_or$OR_upper,
+      p.value         = pval,
+      analysis        = "Multivariable (original)",
+      OR_CI           = sprintf("%.2f [%.2f\u2013%.2f]",
+                                df_or$OR, df_or$OR_lower, df_or$OR_upper),
+      p_fmt           = ifelse(pval < 0.001, "<0.001", sprintf("%.3f", pval)),
+      stringsAsFactors = FALSE
+    )
+  }, original_or_list, group_labels, SIMPLIFY = FALSE))
+  
+  # Define group order explicitly to match forest plot
+  group_order <- c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")
+  
+  # Combine, apply fixed ordering, and format for presentation
+  comparison <- bind_rows(original_rows, psm_rows) %>%
+    mutate(group = factor(group, levels = group_order)) %>%  # fix group order
+    arrange(group, analysis) %>%   # Multivariable (original) before PSM (matched) within each group
+    select(group, analysis, n_pairs, OR_CI, p_fmt) %>%
+    rename(
+      "Subgroup"    = group,
+      "Analysis"    = analysis,
+      "Pairs (PSM)" = n_pairs,
+      "OR [95% CI]" = OR_CI,
+      "p-value"     = p_fmt
+    )
+  
+  # Print to console
+  cat(sprintf("\n========== Comparison table with CI: %s ==========\n", death_outcome))
+  print(comparison, row.names = FALSE)
+  
+  # HTML table
+  htmlTable(
+    comparison,
+    caption = sprintf(
+      "Sensitivity analysis: Multivariable vs PSM \u2014 OR [95%% CI] for PMV on %s. MIMIC-IV",
+      death_outcome))
+  
+  # Save
+  write.csv(
+    comparison,
+    file.path(root_dir, sprintf("data/mimic-iv/psm_vs_multivariable_ci_%s.csv", death_outcome)),
+    row.names = FALSE)
+  
+  return(invisible(comparison))
+}
+
+# --- 1-year mortality ---
+comparison_ci_deathyear <- build_comparison_table_with_ci(
+  psm_list = list(
+    psm_deathyear_nontrauma,
+    psm_deathyear_nontbi,
+    psm_deathyear_nonseveretbi,
+    psm_deathyear_severetbi
+  ),
+  original_or_list = list(
+    or_deathyear_PMV_nontrauma_mimiciv_multivariate,
+    or_deathyear_PMV_traumanontbi_mimiciv_multivariate,
+    or_deathyear_PMV_tbinonsevere_mimiciv_multivariate,
+    or_deathyear_PMV_tbisevere_mimiciv_multivariate
+  ),
+  group_labels  = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI"),
+  death_outcome = "death_year",
+  root_dir      = root_dir
+)
+
+# --- Hospital mortality ---
+comparison_ci_hospdeath <- build_comparison_table_with_ci(
+  psm_list = list(
+    psm_hospdeath_nontrauma,
+    psm_hospdeath_nontbi,
+    psm_hospdeath_nonseveretbi,
+    psm_hospdeath_severetbi
+  ),
+  original_or_list = list(
+    or_hospdeath_PMV_nontrauma_mimiciv_multivariate,
+    or_hospdeath_PMV_traumanontbi_mimiciv_multivariate,
+    or_hospdeath_PMV_tbinonsevere_mimiciv_multivariate,
+    or_hospdeath_PMV_tbisevere_mimiciv_multivariate
+  ),
+  group_labels  = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI"),
+  death_outcome = "inhospital_death",
+  root_dir      = root_dir
+)
+```
+## Comparative Forest Plot
+```{r}
+# ============================================================
+# FOREST PLOT FUNCTION: Multivariable vs PSM comparison
+#
+# Arguments:
+#   original_or_df : single-column OR data frame from multivariable analysis
+#                    (the *_multivariate objects already in your environment,
+#                    combined into one data frame with a 'group' column)
+#   psm_list       : list of PSM result objects from run_psm_analysis()
+#   group_labels   : character vector of subgroup names (in desired plot order)
+#   death_outcome  : "inhospital_death" or "death_year"
+#   plot_title     : string for the plot title (e.g. "a. MIMIC-IV. Outcome: Hospital Mortality")
+#   x_limits       : numeric vector of length 2 for x axis (default c(0, 4))
+#   root_dir       : project root directory for saving
+#
+# What it does:
+#   1. Combines multivariable and PSM OR rows into one data frame
+#   2. Assigns adverse/protective/inconclusive direction per row
+#   3. Builds a side-by-side forest plot using shape to distinguish analyses
+#   4. Saves to figures/mimic-iv/PSM/
+# ============================================================
+
+build_comparison_forest_plot <- function(original_or_df,
+                                         psm_list,
+                                         group_labels,
+                                         death_outcome,
+                                         plot_title,
+                                         x_limits  = c(0, 4),
+                                         root_dir) {
+  
+  # --- 1. Collect PSM OR rows ---
+  psm_rows <- bind_rows(mapply(function(psm_obj, label) {
+    if (is.null(psm_obj)) {
+      # Return NA row so the subgroup still appears in the plot
+      data.frame(
+        group    = label,
+        OR       = NA_real_,
+        OR_lower = NA_real_,
+        OR_upper = NA_real_,
+        analysis = "PSM (matched)",
+        stringsAsFactors = FALSE
+      )
+    } else {
+      psm_obj$or_pmv %>%
+        mutate(analysis = "PSM (matched)") %>%
+        select(group, OR, OR_lower, OR_upper, analysis)
+    }
+  }, psm_list, group_labels, SIMPLIFY = FALSE))
+  
+  # --- 2. Format original OR rows ---
+  original_rows <- original_or_df %>%
+    mutate(analysis = "Multivariable (original)") %>%
+    select(group, OR, OR_lower, OR_upper, analysis)
+  
+  # --- 3. Combine and classify direction ---
+  plot_df <- bind_rows(original_rows, psm_rows) %>%
+    mutate(
+      group = factor(group, levels = rev(group_labels)),  # reverse for ggplot y-axis
+      analysis = factor(analysis,
+                        levels = c("Multivariable (original)", "PSM (matched)")),
+      direction = case_when(
+        OR_lower > 1 & OR_upper > 1 ~ "Positive Association",
+        OR_lower < 1 & OR_upper < 1 ~ "Negative Association",
+        TRUE                         ~ "Inconclusive"
+      ),
+      direction = factor(direction,
+                         levels = c("Positive Association",
+                                    "Negative Association",
+                                    "Inconclusive"))
+    )
+  
+  # --- 4. Build plot ---
+  # Shapes: circle = multivariable original, triangle = PSM
+  # Colors: red = positive, green = negative, gray = inconclusive
+  # Position dodge separates the two analyses vertically within each subgroup
+  
+  fp <- ggplot(plot_df,
+               aes(x     = OR,
+                   xmin  = OR_lower,
+                   xmax  = OR_upper,
+                   y     = group,
+                   color = direction,
+                   shape = analysis)) +
+    geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
+    geom_errorbarh(
+      aes(xmin = OR_lower, xmax = OR_upper),
+      height   = 0.15,
+      position = position_dodge(width = 0.5),
+      na.rm    = TRUE
+    ) +
+    geom_point(
+      size     = 2.5,
+      position = position_dodge(width = 0.5),
+      na.rm    = TRUE
+    ) +
+    scale_color_manual(
+      values = c(
+        "Positive Association" = "#c0392b",
+        "Negative Association" = "#27ae60",
+        "Inconclusive"         = "gray70"
+      ),
+      name   = "Effect on Outcome",
+      drop   = FALSE
+    ) +
+    scale_shape_manual(
+      values = c(
+        "Multivariable (original)" = 16,   # filled circle
+        "PSM (matched)"            = 17    # filled triangle
+      ),
+      name = "Analysis",
+      # Show NA as explicit note in legend rather than removing
+      na.translate = FALSE
+    ) +
+    scale_x_continuous(limits = x_limits) +
+    labs(
+      x     = "Odds Ratio [95% CI]",
+      y     = NULL,
+      title = plot_title
+    ) +
+    theme_minimal() +
+    theme(
+      plot.background    = element_rect(fill = "white", color = NA),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      plot.title         = element_text(hjust = 0.5, size = 11),
+      legend.position    = "top",
+      legend.box         = "vertical",   # stack the two legends vertically
+      axis.ticks         = element_blank(),
+      axis.text.x        = element_text(color = "#2c3e50"),
+      axis.text.y        = element_text(color = "#2c3e50")
+    )
+  
+  # --- 5. Save ---
+  safe_outcome <- gsub("_", "", death_outcome)
+  ggsave(
+    file.path(root_dir,
+              sprintf("figures/mimic-iv/PSM/fp_comparison_psm_%s.png", safe_outcome)),
+    plot   = fp,
+    width  = 10,
+    height = 4,
+    dpi    = 300
+  )
+  
+  return(fp)
+}
+
+
+# ============================================================
+# EXECUTION
+# Build one combined data frame of original OR per outcome,
+# then call the function for each outcome separately
+# ============================================================
+
+# --- Helper: combine the single-row OR objects into one data frame ---
+# Each or_*_multivariate object is a single-row df with OR/OR_lower/OR_upper
+# We add a 'group' column so the function can align them with PSM rows
+
+original_or_hospdeath <- bind_rows(
+  or_hospdeath_PMV_nontrauma_mimiciv_multivariate    %>% mutate(group = "non-trauma"),
+  or_hospdeath_PMV_traumanontbi_mimiciv_multivariate %>% mutate(group = "non-TBI trauma"),
+  or_hospdeath_PMV_tbinonsevere_mimiciv_multivariate %>% mutate(group = "non-severe TBI"),
+  or_hospdeath_PMV_tbisevere_mimiciv_multivariate    %>% mutate(group = "severe TBI")
+)
+
+original_or_deathyear <- bind_rows(
+  or_deathyear_PMV_nontrauma_mimiciv_multivariate    %>% mutate(group = "non-trauma"),
+  or_deathyear_PMV_traumanontbi_mimiciv_multivariate %>% mutate(group = "non-TBI trauma"),
+  or_deathyear_PMV_tbinonsevere_mimiciv_multivariate %>% mutate(group = "non-severe TBI"),
+  or_deathyear_PMV_tbisevere_mimiciv_multivariate    %>% mutate(group = "severe TBI")
+)
+
+# --- Hospital mortality forest plot ---
+fp_comparison_hospdeath <- build_comparison_forest_plot(
+  original_or_df = original_or_hospdeath,
+  psm_list       = list(
+    psm_hospdeath_nontrauma,
+    psm_hospdeath_nontbi,
+    psm_hospdeath_nonseveretbi,
+    psm_hospdeath_severetbi
+  ),
+  group_labels   = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI"),
+  death_outcome  = "inhospital_death",
+  plot_title     = "a. MIMIC-IV. Outcome: Hospital Mortality",
+  x_limits       = c(0, 4),
+  root_dir       = root_dir
+)
+
+fp_comparison_hospdeath
+
+# --- 1-year mortality forest plot ---
+fp_comparison_deathyear <- build_comparison_forest_plot(
+  original_or_df = original_or_deathyear,
+  psm_list       = list(
+    psm_deathyear_nontrauma,
+    psm_deathyear_nontbi,
+    psm_deathyear_nonseveretbi,
+    psm_deathyear_severetbi
+  ),
+  group_labels   = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI"),
+  death_outcome  = "death_year",
+  plot_title     = "b. MIMIC-IV. Outcome: 1-Year Mortality",
+  x_limits       = c(0, 4),
+  root_dir       = root_dir
+)
+
+fp_comparison_deathyear
+
+```
+
+
+
+
+

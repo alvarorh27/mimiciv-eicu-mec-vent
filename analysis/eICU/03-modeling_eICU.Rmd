@@ -195,7 +195,6 @@ create_summary_table <- function(df, death_outcome, df_column=NULL, row_label, c
 
 # Titles for html outputs
 caption_hospdeath_multivariable <- "Multivariable Analysis. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database"
-caption_deathyear_multivariable <- "Multivariable Analysis. Odds Ratio and Confidence Intervals for 1 Year-Mortality-associated Factors. eICU Database"
 
 ```
 
@@ -515,7 +514,414 @@ htmlTable(hospdeath_counts_summary, caption = "Counts and percentages of differe
 ```
 
 
+# Propensity Score Matching
 
+## PSM
+```{r}
+# ============================================================
+# PROPENSITY SCORE MATCHING (PSM) - SENSITIVITY ANALYSIS
+#
+# Strategy: within each trauma subgroup, match each PMV patient
+# to the most similar non-PMV patient by propensity score, then
+# re-estimate the OR of PMV on hospital mortality in the matched sample.
+# ============================================================
+
+library(MatchIt)
+library(cobalt)
+library(sandwich)
+library(lmtest)
+
+dir.create(file.path(root_dir, "figures/eICU/PSM"), recursive = TRUE, showWarnings = FALSE)
+
+required_psm_vars <- c(
+  "prolonged_mec_vent", "inhospital_death", "trauma_type_anyseq",
+  "age", "sex", "aps", "charlson"
+)
+
+missing_psm_vars <- setdiff(required_psm_vars, names(final_dataset_eICU))
+if (length(missing_psm_vars) > 0) {
+  stop(sprintf("Missing variables required for eICU PSM: %s", paste(missing_psm_vars, collapse = ", ")))
+}
+
+run_psm_analysis_eicu <- function(df,
+                                  death_outcome,
+                                  group_label,
+                                  covariates = c("age", "sex", "aps", "charlson"),
+                                  ratio      = 1,
+                                  caliper    = 0.2,
+                                  root_dir) {
+
+  missing_vars <- setdiff(c("prolonged_mec_vent", death_outcome, covariates), names(df))
+  if (length(missing_vars) > 0) {
+    stop(sprintf("Group '%s': missing variables for PSM: %s",
+                 group_label, paste(missing_vars, collapse = ", ")))
+  }
+
+  cat(sprintf("\n========== eICU PSM: %s | Outcome: %s ==========\n",
+              group_label, death_outcome))
+
+  n_pmv   <- sum(df$prolonged_mec_vent == 1, na.rm = TRUE)
+  n_nopmv <- sum(df$prolonged_mec_vent == 0, na.rm = TRUE)
+  cat(sprintf("Pre-matching: PMV = %d, no-PMV = %d\n", n_pmv, n_nopmv))
+
+  if (n_pmv < 10 || n_nopmv < 10) {
+    warning(sprintf(
+      "Group '%s': insufficient n for PSM (PMV=%d, no-PMV=%d). Skipping.",
+      group_label, n_pmv, n_nopmv))
+    return(NULL)
+  }
+
+  n_events_pmv   <- sum(df[[death_outcome]][df$prolonged_mec_vent == 1], na.rm = TRUE)
+  n_events_nopmv <- sum(df[[death_outcome]][df$prolonged_mec_vent == 0], na.rm = TRUE)
+  cat(sprintf("Events (pre-matching): PMV = %d, no-PMV = %d\n",
+              n_events_pmv, n_events_nopmv))
+
+  if (n_events_pmv < 5 || n_events_nopmv < 5) {
+    warning(sprintf(
+      "Group '%s': insufficient events for PSM (events PMV=%d, no-PMV=%d). Skipping.",
+      group_label, n_events_pmv, n_events_nopmv))
+    return(NULL)
+  }
+
+  ps_formula <- as.formula(
+    paste("prolonged_mec_vent ~", paste(covariates, collapse = " + "))
+  )
+
+  match_obj <- matchit(
+    formula     = ps_formula,
+    data        = df,
+    method      = "nearest",
+    distance    = "glm",
+    link        = "logit",
+    replace     = FALSE,
+    ratio       = ratio,
+    caliper     = caliper,
+    std.caliper = TRUE
+  )
+
+  matched_df  <- match.data(match_obj)
+  n_matched   <- as.integer(sum(matched_df$prolonged_mec_vent == 1))
+  n_unmatched <- as.integer(n_pmv - n_matched)
+  cat(sprintf("Post-matching: %d pairs formed | PMV unmatched: %d\n",
+              n_matched, n_unmatched))
+
+  n_events_pmv_matched <- sum(
+    matched_df[[death_outcome]][matched_df$prolonged_mec_vent == 1],
+    na.rm = TRUE
+  )
+  n_events_nopmv_matched <- sum(
+    matched_df[[death_outcome]][matched_df$prolonged_mec_vent == 0],
+    na.rm = TRUE
+  )
+
+  if (n_events_pmv_matched < 5 || n_events_nopmv_matched < 5) {
+    warning(sprintf(
+      "Group '%s': insufficient events in matched sample (PMV=%d, no-PMV=%d). Skipping.",
+      group_label, n_events_pmv_matched, n_events_nopmv_matched))
+    return(NULL)
+  }
+
+  balance_obj <- summary(match_obj, standardize = TRUE)
+  smd_before <- as.data.frame(balance_obj$sum.all)[, "Std. Mean Diff.", drop = FALSE]
+  smd_after  <- as.data.frame(balance_obj$sum.matched)[, "Std. Mean Diff.", drop = FALSE]
+
+  smd_table <- data.frame(
+    variable   = rownames(smd_before),
+    SMD_before = round(smd_before[, 1], 3),
+    SMD_after  = round(smd_after[, 1], 3),
+    balanced   = abs(smd_after[, 1]) < 0.1,
+    stringsAsFactors = FALSE
+  )
+  rownames(smd_table) <- NULL
+
+  outcome_formula <- as.formula(
+    paste(death_outcome, "~ prolonged_mec_vent +", paste(covariates, collapse = " + "))
+  )
+
+  model_matched <- glm(
+    formula = outcome_formula,
+    data    = matched_df,
+    family  = binomial(),
+    weights = matched_df$weights
+  )
+
+  robust_vcov    <- vcovCL(model_matched, cluster = ~subclass, type = "HC3")
+  robust_results <- coeftest(model_matched, vcov = robust_vcov)
+
+  coef_names <- rownames(robust_results)
+  estimates  <- robust_results[, "Estimate"]
+  se_robust  <- robust_results[, "Std. Error"]
+  pvals      <- robust_results[, "Pr(>|z|)"]
+
+  or_psm_full <- data.frame(
+    term     = coef_names,
+    OR       = round(exp(estimates), 2),
+    OR_lower = round(exp(estimates - 1.96 * se_robust), 2),
+    OR_upper = round(exp(estimates + 1.96 * se_robust), 2),
+    p.value  = round(pvals, 4),
+    stringsAsFactors = FALSE
+  )
+  rownames(or_psm_full) <- NULL
+
+  pmv_row_index <- which(or_psm_full$term == "prolonged_mec_vent")
+  or_pmv_row <- data.frame(
+    group           = group_label,
+    outcome         = death_outcome,
+    n_pairs         = n_matched,
+    n_pmv_unmatched = n_unmatched,
+    OR              = ifelse(length(pmv_row_index) == 0, NA_real_, or_psm_full$OR[pmv_row_index]),
+    OR_lower        = ifelse(length(pmv_row_index) == 0, NA_real_, or_psm_full$OR_lower[pmv_row_index]),
+    OR_upper        = ifelse(length(pmv_row_index) == 0, NA_real_, or_psm_full$OR_upper[pmv_row_index]),
+    p.value         = ifelse(length(pmv_row_index) == 0, NA_real_, or_psm_full$p.value[pmv_row_index]),
+    stringsAsFactors = FALSE
+  )
+
+  love_plot <- cobalt::love.plot(
+    match_obj,
+    stats      = "mean.diffs",
+    thresholds = c(m = 0.1),
+    abs        = TRUE,
+    binary     = "std",
+    title      = sprintf("Covariate Balance: %s", group_label),
+    colors     = c("red3", "steelblue"),
+    shapes     = c("triangle", "circle"),
+    labels     = TRUE
+  )
+
+  safe_label <- gsub("[^a-z0-9]", "_", tolower(group_label))
+
+  write.csv(
+    smd_table,
+    file.path(root_dir, sprintf("data/eICU/psm_balance_%s_%s.csv", safe_label, death_outcome)),
+    row.names = FALSE)
+
+  write.csv(
+    or_psm_full,
+    file.path(root_dir, sprintf("data/eICU/psm_or_full_%s_%s.csv", safe_label, death_outcome)),
+    row.names = FALSE)
+
+  ggsave(
+    file.path(root_dir, sprintf("figures/eICU/PSM/loveplot_%s_%s.png", safe_label, death_outcome)),
+    plot = love_plot, width = 7, height = 4, dpi = 300)
+
+  return(list(
+    match_obj       = match_obj,
+    matched_df      = matched_df,
+    smd_table       = smd_table,
+    or_psm_full     = or_psm_full,
+    or_pmv          = or_pmv_row,
+    love_plot       = love_plot,
+    n_pairs         = n_matched,
+    n_pmv_unmatched = n_unmatched
+  ))
+}
+
+psm_group_labels <- c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")
+
+for (sg in psm_group_labels) {
+  df_sg <- final_dataset_eICU %>% filter(trauma_type_anyseq == sg)
+  cat("\n---", sg, "---\n")
+  cat("PMV:                    ", sum(df_sg$prolonged_mec_vent == 1, na.rm = TRUE), "\n")
+  cat("no-PMV:                 ", sum(df_sg$prolonged_mec_vent == 0, na.rm = TRUE), "\n")
+  cat("Hospital deaths in PMV: ", sum(df_sg$inhospital_death[df_sg$prolonged_mec_vent == 1], na.rm = TRUE), "\n")
+}
+
+df_nontrauma_eicu    <- final_dataset_eICU %>% filter(trauma_type_anyseq == "non-trauma")
+df_nontbi_eicu       <- final_dataset_eICU %>% filter(trauma_type_anyseq == "non-TBI trauma")
+df_nonseveretbi_eicu <- final_dataset_eICU %>% filter(trauma_type_anyseq == "non-severe TBI")
+df_severetbi_eicu    <- final_dataset_eICU %>% filter(trauma_type_anyseq == "severe TBI")
+
+psm_hospdeath_nontrauma_eicu    <- run_psm_analysis_eicu(df_nontrauma_eicu,    "inhospital_death", "non-trauma",     root_dir = root_dir)
+psm_hospdeath_nontbi_eicu       <- run_psm_analysis_eicu(df_nontbi_eicu,       "inhospital_death", "non-TBI trauma", root_dir = root_dir)
+psm_hospdeath_nonseveretbi_eicu <- run_psm_analysis_eicu(df_nonseveretbi_eicu, "inhospital_death", "non-severe TBI", root_dir = root_dir)
+psm_hospdeath_severetbi_eicu    <- run_psm_analysis_eicu(df_severetbi_eicu,    "inhospital_death", "severe TBI",     root_dir = root_dir)
+```
+
+## Comparative table
+```{r}
+build_comparison_table_with_ci_eicu <- function(psm_list,
+                                                original_or_list,
+                                                group_labels,
+                                                death_outcome,
+                                                root_dir) {
+
+  psm_rows <- bind_rows(lapply(psm_list, function(x) {
+    if (is.null(x)) return(NULL)
+    x$or_pmv %>%
+      mutate(
+        analysis = "PSM (matched)",
+        OR_CI    = sprintf("%.2f [%.2f-%.2f]", OR, OR_lower, OR_upper),
+        p_fmt    = ifelse(p.value < 0.001, "<0.001", sprintf("%.3f", p.value))
+      )
+  }))
+
+  original_rows <- bind_rows(mapply(function(df_or, label) {
+    data.frame(
+      group           = label,
+      outcome         = death_outcome,
+      n_pairs         = NA_integer_,
+      n_pmv_unmatched = NA_integer_,
+      OR              = df_or$OR,
+      OR_lower        = df_or$OR_lower,
+      OR_upper        = df_or$OR_upper,
+      p.value         = df_or$p.value,
+      analysis        = "Multivariable (original)",
+      OR_CI           = sprintf("%.2f [%.2f-%.2f]", df_or$OR, df_or$OR_lower, df_or$OR_upper),
+      p_fmt           = ifelse(df_or$p.value < 0.001, "<0.001", sprintf("%.3f", df_or$p.value)),
+      stringsAsFactors = FALSE
+    )
+  }, original_or_list, group_labels, SIMPLIFY = FALSE))
+
+  comparison <- bind_rows(original_rows, psm_rows) %>%
+    mutate(group = factor(group, levels = group_labels)) %>%
+    arrange(group, analysis) %>%
+    select(group, analysis, n_pairs, OR_CI, p_fmt) %>%
+    rename(
+      "Subgroup"    = group,
+      "Analysis"    = analysis,
+      "Pairs (PSM)" = n_pairs,
+      "OR [95% CI]" = OR_CI,
+      "p-value"     = p_fmt
+    )
+
+  htmlTable(
+    comparison,
+    caption = sprintf(
+      "Sensitivity analysis: Multivariable vs PSM - OR [95%% CI] for PMV on %s. eICU",
+      death_outcome))
+
+  write.csv(
+    comparison,
+    file.path(root_dir, sprintf("data/eICU/psm_vs_multivariable_ci_%s.csv", death_outcome)),
+    row.names = FALSE)
+
+  write.csv(
+    bind_rows(original_rows, psm_rows) %>% arrange(group, analysis),
+    file.path(root_dir, sprintf("data/eICU/psm_vs_multivariable_%s.csv", death_outcome)),
+    row.names = FALSE)
+
+  return(invisible(comparison))
+}
+
+comparison_ci_hospdeath_eicu <- build_comparison_table_with_ci_eicu(
+  psm_list = list(
+    psm_hospdeath_nontrauma_eicu,
+    psm_hospdeath_nontbi_eicu,
+    psm_hospdeath_nonseveretbi_eicu,
+    psm_hospdeath_severetbi_eicu
+  ),
+  original_or_list = list(
+    or_hospdeath_PMV_nontrauma_eICU_multivariate,
+    or_hospdeath_PMV_traumanontbi_eICU_multivariate,
+    or_hospdeath_PMV_tbinonsevere_eICU_multivariate,
+    or_hospdeath_PMV_tbisevere_eICU_multivariate
+  ),
+  group_labels  = psm_group_labels,
+  death_outcome = "inhospital_death",
+  root_dir      = root_dir
+)
+```
+
+## Comparative Forest Plot
+```{r}
+original_or_hospdeath_eicu <- bind_rows(
+  or_hospdeath_PMV_nontrauma_eICU_multivariate    %>% mutate(group = "non-trauma"),
+  or_hospdeath_PMV_traumanontbi_eICU_multivariate %>% mutate(group = "non-TBI trauma"),
+  or_hospdeath_PMV_tbinonsevere_eICU_multivariate %>% mutate(group = "non-severe TBI"),
+  or_hospdeath_PMV_tbisevere_eICU_multivariate    %>% mutate(group = "severe TBI")
+)
+
+build_comparison_forest_plot_eicu <- function(original_or_df,
+                                              psm_list,
+                                              group_labels,
+                                              death_outcome,
+                                              plot_title,
+                                              x_limits = c(0, 6),
+                                              root_dir) {
+
+  psm_rows <- bind_rows(mapply(function(psm_obj, label) {
+    if (is.null(psm_obj)) {
+      data.frame(group = label, OR = NA_real_, OR_lower = NA_real_, OR_upper = NA_real_,
+                 analysis = "PSM (matched)", stringsAsFactors = FALSE)
+    } else {
+      psm_obj$or_pmv %>% mutate(analysis = "PSM (matched)") %>%
+        select(group, OR, OR_lower, OR_upper, analysis)
+    }
+  }, psm_list, group_labels, SIMPLIFY = FALSE))
+
+  plot_df <- bind_rows(
+    original_or_df %>% mutate(analysis = "Multivariable (original)") %>%
+      select(group, OR, OR_lower, OR_upper, analysis),
+    psm_rows
+  ) %>%
+    mutate(
+      group = factor(group, levels = rev(group_labels)),
+      analysis = factor(analysis, levels = c("Multivariable (original)", "PSM (matched)")),
+      direction = case_when(
+        OR_lower > 1 & OR_upper > 1 ~ "Positive Association",
+        OR_lower < 1 & OR_upper < 1 ~ "Negative Association",
+        TRUE ~ "Inconclusive"
+      )
+    )
+
+  fp <- ggplot(plot_df, aes(x = OR, xmin = OR_lower, xmax = OR_upper,
+                            y = group, color = direction, shape = analysis)) +
+    geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
+    geom_errorbarh(height = 0.15, position = position_dodge(width = 0.5), na.rm = TRUE) +
+    geom_point(size = 2.5, position = position_dodge(width = 0.5), na.rm = TRUE) +
+    scale_color_manual(
+      values = c("Positive Association" = "#c0392b",
+                 "Negative Association" = "#27ae60",
+                 "Inconclusive" = "gray70"),
+      name = "Effect on Outcome",
+      drop = FALSE
+    ) +
+    scale_shape_manual(
+      values = c("Multivariable (original)" = 16, "PSM (matched)" = 17),
+      name = "Analysis",
+      na.translate = FALSE
+    ) +
+    scale_x_continuous(limits = x_limits) +
+    labs(x = "Odds Ratio [95% CI]", y = NULL, title = plot_title) +
+    theme_minimal() +
+    theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      plot.title = element_text(hjust = 0.5, size = 11),
+      legend.position = "top",
+      legend.box = "vertical",
+      axis.ticks = element_blank(),
+      axis.text.x = element_text(color = "#2c3e50"),
+      axis.text.y = element_text(color = "#2c3e50")
+    )
+
+  safe_outcome <- gsub("_", "", death_outcome)
+  ggsave(
+    file.path(root_dir, sprintf("figures/eICU/PSM/fp_comparison_psm_%s.png", safe_outcome)),
+    plot = fp, width = 10, height = 4, dpi = 300
+  )
+
+  return(fp)
+}
+
+fp_comparison_hospdeath_eicu <- build_comparison_forest_plot_eicu(
+  original_or_df = original_or_hospdeath_eicu,
+  psm_list = list(
+    psm_hospdeath_nontrauma_eicu,
+    psm_hospdeath_nontbi_eicu,
+    psm_hospdeath_nonseveretbi_eicu,
+    psm_hospdeath_severetbi_eicu
+  ),
+  group_labels  = psm_group_labels,
+  death_outcome = "inhospital_death",
+  plot_title    = "d. eICU. Outcome: Hospital Mortality",
+  x_limits      = c(0, 6),
+  root_dir      = root_dir
+)
+
+fp_comparison_hospdeath_eicu
+```
 
 
 

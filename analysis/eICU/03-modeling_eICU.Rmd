@@ -18,6 +18,8 @@ library(dplyr)
 library(feather)
 library(broom)
 library(htmlTable)
+library(flextable)
+library(officer)
 library(rlang)
 library(randomForest)
 library(caret)
@@ -30,9 +32,9 @@ library(webshot2)
 ## Define the root directory
 root_dir <- "C:/Users/se_al/Documents/GitHub/mimiciv-mec-vent"
 
-## Function for recategorizing column to a specific variable 
+## Function for recategorizing column to a specific variable
 recategorize_function <- function(df, df_column, column_value) {
-  df %>% 
+  df %>%
     mutate(!!df_column := as.factor(.data[[df_column]]),
            !!df_column := relevel(as.factor(.data[[df_column]]), ref = column_value))
 }
@@ -47,7 +49,7 @@ extract_coef_pval_OR <- function(model) {
                        OR = round(exp(estimate),2),
                        OR_lower = round(exp(estimate - 1.96 * std.error),2),
                        OR_upper = round(exp(estimate + 1.96 * std.error),2)))
-} 
+}
 
 ## Function for transforming names from OR's table and add adverse_protective variable
 or_transformation <- function(df, custom_terms, variable_index) {
@@ -69,14 +71,14 @@ or_transformation <- function(df, custom_terms, variable_index) {
     ) %>%
     arrange(match(term, variable_index)) %>%
     filter(term != "Intercept")
-  
+
   rownames(df) <- NULL #resets index
-  
+
   return(df_transformed)
 }
 
 
-## Dictionary to relabel terms in the final tables (for better readability and presentation) 
+## Dictionary to relabel terms in the final tables (for better readability and presentation)
 dict_terms <- c(
   "prolonged_mec_vent" = "PMV",
   "trauma_type_anyseqnon-severe TBI" = "TBI non-severe",
@@ -93,19 +95,19 @@ dict_terms <- c(
   "prolonged_mec_vent:trauma_type3_anyseqnon-TBI trauma" = "PMV + non-TBI trauma",
   "prolonged_mec_vent:trauma_type3_anyseqnon-trauma" = "PMV + non-trauma",
   "prolonged_mec_vent:trauma_type3_anyseqTBI" = "PMV + TBI",
-  "anytrauma_anyseq0" = "non-trauma", 
+  "anytrauma_anyseq0" = "non-trauma",
   "prolonged_mec_vent:anytrauma_anyseq0" = "PMV + non-trauma",
-  "anytrauma_anyseq1" = "Any Trauma", 
+  "anytrauma_anyseq1" = "Any Trauma",
   "prolonged_mec_vent:anytrauma_anyseq1" = "PMV + Any Trauma",
   "age" = "Age (years)",
   "sexMale" = "Sex (male)",
   "sexUnknown" = "Sex (unknown)",
   "aps" = "APSIII",
-  "charlson" = "Charlson", 
+  "charlson" = "Charlson",
   "PMV for non-Trauma" = "PMV - non-trauma",
   "PMV for Trauma not TBI" = "PMV - non-TBI trauma",
   "PMV for TBI non-severe" = "PMV - non-severe TBI",
-  "PMV for TBI severe" = "PMV - severe TBI", 
+  "PMV for TBI severe" = "PMV - severe TBI",
   "metastasis" = "Metastasis",
   "hiv" = "HIV",
   "liver_cirrhosis" = "Liver Cirrhosis",
@@ -155,46 +157,224 @@ univariate_analysis <- function(df, death_outcome, df_column=NULL, output_name) 
 
 ## Function to obtain counts and mortality percentages for different columns and categories
 create_summary_table <- function(df, death_outcome, df_column=NULL, row_label, column_value=NULL) {
-  
+
   ## If df_column is not specified, it takes the whole dataset. If it is, a subset is taken
   if (is.null(df_column)) {
     subset_trauma <- df
   } else {
     subset_trauma <- subset(df, df[[df_column]] == column_value)
   }
-  
-  ## Filters dataframe for specific column and trauma type  
+
+  ## Filters dataframe for specific column and trauma type
   subset_trauma_pmv <- subset(subset_trauma, prolonged_mec_vent == 1)
   subset_trauma_nonpmv <- subset(subset_trauma, prolonged_mec_vent == 0)
-  
+
   ## Calculate totals and percentages
   total_number <- nrow(subset_trauma)
   Pct_category <- (total_number / nrow(df)) * 100
   n_PMV <- nrow(subset_trauma_pmv)
   n_not_pmv <- nrow(subset_trauma_nonpmv)
-  
+
   Pct_PMV <- (n_PMV / total_number) * 100
   Pct_not_PMV <- (n_not_pmv / total_number) * 100
-  
-  ## Create summary table  
+
+  ## Create summary table
   summary_table <- data.frame(
     trauma_type = row_label,
     total_number = total_number,
     Pct_category = Pct_category,
     n_PMV = n_PMV,
-    Pct_PMV = Pct_PMV, 
+    Pct_PMV = Pct_PMV,
     mortality_pmv = (sum(subset_trauma_pmv[[death_outcome]] == 1) / n_PMV) * 100,
     n_not_pmv = n_not_pmv,
     Pct_not_PMV = Pct_not_PMV,
     mortality_not_pmv = (sum(subset_trauma_nonpmv[[death_outcome]] == 1) / n_not_pmv) * 100
   )
-  
+
   return(summary_table)
+}
+
+## Function for multivariable mortality analysis with GAM age spline (sensitivity)
+run_age_spline_model <- function(df,
+                                 model_formula,
+                                 death_outcome,
+                                 output_name,
+                                 output_file,
+                                 k = 10) {
+
+  cat(sprintf("\nLogistic Regression of %s: %s + age(spline)\n", death_outcome, output_name))
+
+  if (!exists("root_dir", inherits = TRUE)) {
+    stop("root_dir is not defined. Define root_dir before running spline model exports.")
+  }
+
+  # Replace the parametric 'age' term by a thin-plate spline s(age).
+  # k is only the basis dimension (upper bound on flexibility), not the final edf.
+  gam_formula <- update(
+    model_formula,
+    . ~ . - age + s(age, k = k, bs = "tp")
+  )
+  # Reset the formula environment so that the local argument 'k' is resolved by gam().
+  environment(gam_formula) <- environment()
+
+  # Spline model: smoothness (edf) is estimated automatically via the REML penalty.
+  logreg_age_spline <- mgcv::gam(
+    gam_formula,
+    data = df,
+    family = binomial(link = "logit"),
+    method = "REML"
+  )
+
+  # Reference linear-age model (same engine) used as the linearity comparator.
+  logreg_age_linear <- mgcv::gam(
+    model_formula,
+    data = df,
+    family = binomial(link = "logit"),
+    method = "REML"
+  )
+
+  gam_summary <- summary(logreg_age_spline)
+  age_smooth_row <- gam_summary$s.table["s(age)", ]
+
+  # Smooth summary: edf near 1 suggests a linear age-outcome relationship.
+  age_spline_summary <- data.frame(
+    group = paste0(output_name, " + age(spline)"),
+    outcome = death_outcome,
+    smooth = sprintf("s(age, k = %s, bs = 'tp')", k),
+    age_edf = age_smooth_row[["edf"]],
+    age_smooth_pvalue = age_smooth_row[["p-value"]]
+  )
+
+  # OR table for parametric terms only (spline basis coefficients are removed).
+  or_1_age_spline <- extract_coef_pval_OR(logreg_age_spline)
+  or_1_age_spline <- or_1_age_spline[!grepl("^s\\(age\\)", or_1_age_spline$term), ]
+  or_2_age_spline <- or_transformation(or_1_age_spline, dict_terms, variable_order)
+  or_pmv_age_spline <- or_2_age_spline[or_2_age_spline[, 1] == "PMV", c(1, 5:9)]
+  or_pmv_age_spline[, 1] <- paste0(output_name, " + age(spline)")
+
+  output_path <- file.path(root_dir, output_file)
+  output_smooth_path <- file.path(root_dir, sub("\\.csv$", "_smooth.csv", output_file))
+
+  write.csv(or_2_age_spline, output_path)
+  write.csv(
+    age_spline_summary,
+    output_smooth_path,
+    row.names = FALSE
+  )
+
+  # k-adequacy diagnostic: if edf is close to k' with a low p-value, increase k.
+  set.seed(42)
+  k_diagnostic <- mgcv::k.check(logreg_age_spline)
+
+  # Linearity diagnostic: AIC of the linear-age vs the spline-age model.
+  aic_comparison <- AIC(logreg_age_linear, logreg_age_spline)
+
+  # ---- Console / knit output ----
+  print(htmlTable(or_2_age_spline[, var_html], caption = caption_hospdeath_spline_multivariable))
+
+  cat("\n-- Age smooth summary (edf, smooth p-value) --\n")
+  print(age_spline_summary)
+
+  cat("\n-- k-adequacy check (k.check): edf should stay below k' --\n")
+  print(k_diagnostic)
+
+  cat("\n-- Linearity check: AIC (linear age vs spline age) --\n")
+  print(aic_comparison)
+
+  # Smooth on the logit scale: a near-straight line corroborates linearity.
+  plot(logreg_age_spline,
+       select = 1, shade = TRUE, seWithMean = TRUE,
+       main = paste0(output_name, ": s(age) on logit scale"))
+
+  return(list(
+    model = logreg_age_spline,
+    linear_model = logreg_age_linear,
+    or_table = or_2_age_spline,
+    or_pmv = or_pmv_age_spline,
+    gam_summary = gam_summary,
+    age_spline_summary = age_spline_summary,
+    k_check = k_diagnostic,
+    aic_comparison = aic_comparison
+  ))
+}
+
+## Function to build and export the GAM sensitivity comparison table to .docx
+## Inputs:
+##   - linear_or_list:    list of one-row data.frames with the linear PMV OR per subgroup
+##                        (each row has columns: term, p.value, OR, OR_lower, OR_upper, adverse_protective)
+##   - spline_result_list: list of run_age_spline_model() returns per subgroup
+##   - subgroup_labels:   character vector with the labels to display (in display order, top to bottom)
+##   - caption:           table caption (string)
+##   - output_dir:        relative path under root_dir where the .docx will be saved
+##   - save_name:         filename (without extension) for the .docx
+## The two lists must be in the SAME order as subgroup_labels.
+
+build_age_spline_comparison_table <- function(linear_or_list,
+                                              spline_result_list,
+                                              subgroup_labels,
+                                              caption,
+                                              output_dir,
+                                              save_name) {
+
+  # Build one row per subgroup combining linear OR, spline OR, edf, and ΔAIC
+  rows <- lapply(seq_along(subgroup_labels), function(i) {
+    lin <- linear_or_list[[i]]
+    spl <- spline_result_list[[i]]
+    spl_or <- spl$or_pmv
+
+    # Format OR (95% CI) as "X.XX (X.XX–X.XX)"
+    or_lin_fmt <- sprintf("%.2f (%.2f–%.2f)", lin$OR, lin$OR_lower, lin$OR_upper)
+    or_spl_fmt <- sprintf("%.2f (%.2f–%.2f)", spl_or$OR, spl_or$OR_lower, spl_or$OR_upper)
+
+    # Use the same rounding as the OR tables to keep Δ consistent with reported OR
+    delta_or  <- round(spl_or$OR, 2) - round(lin$OR, 2)
+    edf_val   <- round(spl$age_spline_summary$age_edf, 2)
+    delta_aic <- round(spl$aic_comparison$AIC[1] - spl$aic_comparison$AIC[2], 1)
+
+    data.frame(
+      Subgroup            = subgroup_labels[i],
+      `OR (95% CI), linear age`  = or_lin_fmt,
+      `OR (95% CI), spline age`  = or_spl_fmt,
+      `Δ OR`              = sprintf("%+.2f", delta_or),
+      `edf`               = edf_val,
+      `ΔAIC`              = delta_aic,
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  comparison_df <- do.call(rbind, rows)
+  dir.create(file.path(root_dir, output_dir), recursive = TRUE, showWarnings = FALSE)
+
+  # Build the flextable
+  set_flextable_defaults(font.size = 10)
+  ft <- flextable(comparison_df) %>%
+    set_caption(caption = caption) %>%
+    set_table_properties(layout = "autofit") %>%
+    align(align = "left",   part = "body",   j = 1) %>%
+    align(align = "center", part = "body",   j = 2:ncol(comparison_df)) %>%
+    align(align = "center", part = "header") %>%
+    bold(part = "header") %>%
+    add_footer_lines(values = paste(
+      "edf: effective degrees of freedom of the age smooth.",
+      "ΔAIC = AIC(linear age) − AIC(spline age); positive values favor the spline.",
+      "All GAMs fitted with thin-plate regression splines (k = 10, REML).",
+      "Note: subgroups sharing the same trauma categorization (e.g., non-severe and severe TBI)",
+      "are relevels of the same underlying GAM, so they share edf and ΔAIC."
+    ))
+
+  # Export to .docx
+  read_docx() %>%
+    body_add_flextable(value = ft) %>%
+    print(target = file.path(root_dir, output_dir, paste0(save_name, ".docx")))
+
+  return(comparison_df)
 }
 
 
 # Titles for html outputs
 caption_hospdeath_multivariable <- "Multivariable Analysis. Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database"
+caption_hospdeath_spline_multivariable <- "Multivariable Analysis with age(spline). Odds Ratio and Confidence Intervals for Hospital Mortality-associated Factors. eICU Database"
 
 ```
 
@@ -217,7 +397,7 @@ logreg <- glm(
   data = final_dataset_eICU,
   family = binomial())
 
-## Extract OR, assign proper labels and save PMV's OR for this specific model 
+## Extract OR, assign proper labels and save PMV's OR for this specific model
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
 or_hospdeath_PMV_allpopulation_eICU_multivariate <- or_2[or_2[,1]=="PMV", c(1,5:9)]
@@ -229,6 +409,20 @@ htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 
 # Univariate analysis
 or_hospdeath_PMV_allpopulation_eICU_univariate <- univariate_analysis(df=final_dataset_eICU, death_outcome="inhospital_death", output_name="PMV for All Population")
+```
+
+## Total Population + age(spline)
+
+```{r}
+hospdeath_age_spline_allpopulation_eICU <- run_age_spline_model(
+  df = final_dataset_eICU,
+  model_formula = inhospital_death ~ prolonged_mec_vent + age + sex + aps + charlson,
+  death_outcome = "inhospital_death",
+  output_name = "PMV for All Population",
+  output_file = "data/eICU/or_hospdeath_PMV-allpopulation_age-spline_eICU.csv"
+)
+
+or_hospdeath_PMV_allpopulation_age_spline_eICU_multivariate <- hospdeath_age_spline_allpopulation_eICU$or_pmv
 ```
 
 ## non_trauma
@@ -245,7 +439,7 @@ logreg <- glm(
   data = final_dataset_recategorized,
   family = binomial())
 
-## Extract OR, assign proper labels and save PMV's OR for this specific model 
+## Extract OR, assign proper labels and save PMV's OR for this specific model
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
 or_hospdeath_PMV_nontrauma_eICU_multivariate <- or_2[or_2[,1]=="PMV", c(1,5:9)]
@@ -257,6 +451,22 @@ htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 
 # Univariate analysis
 or_hospdeath_PMV_nontrauma_eICU_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="anytrauma_anyseq", output_name="PMV for non-Trauma")
+```
+
+## non_trauma + age(spline)
+
+```{r}
+final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "anytrauma_anyseq", "0")
+
+hospdeath_age_spline_nontrauma_eICU <- run_age_spline_model(
+  df = final_dataset_recategorized,
+  model_formula = inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + aps + charlson,
+  death_outcome = "inhospital_death",
+  output_name = "PMV for non-Trauma",
+  output_file = "data/eICU/or_hospdeath_PMV-nontrauma_age-spline_eICU.csv"
+)
+
+or_hospdeath_PMV_nontrauma_age_spline_eICU_multivariate <- hospdeath_age_spline_nontrauma_eICU$or_pmv
 ```
 
 ## Traumatized
@@ -273,7 +483,7 @@ logreg <- glm(
   data = final_dataset_recategorized,
   family = binomial())
 
-## Extract OR, assign proper labels and save PMV's OR for this specific model 
+## Extract OR, assign proper labels and save PMV's OR for this specific model
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
 or_hospdeath_PMV_anytrauma_eICU_multivariate <- or_2[or_2[,1]=="PMV", c(1,5:9)]
@@ -286,6 +496,22 @@ htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 # Univariate analysis
 or_hospdeath_PMV_anytrauma_eICU_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="anytrauma_anyseq", output_name="PMV for Traumatized Patients")
 
+```
+
+## Traumatized + age(spline)
+
+```{r}
+final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "anytrauma_anyseq", "1")
+
+hospdeath_age_spline_anytrauma_eICU <- run_age_spline_model(
+  df = final_dataset_recategorized,
+  model_formula = inhospital_death ~ prolonged_mec_vent * anytrauma_anyseq + age + sex + aps + charlson,
+  death_outcome = "inhospital_death",
+  output_name = "PMV for Traumatized Patients",
+  output_file = "data/eICU/or_hospdeath_PMV-anytrauma_age-spline_eICU.csv"
+)
+
+or_hospdeath_PMV_anytrauma_age_spline_eICU_multivariate <- hospdeath_age_spline_anytrauma_eICU$or_pmv
 ```
 
 ## trauma_non_tbi
@@ -301,8 +527,8 @@ logreg <- glm(
    inhospital_death ~ prolonged_mec_vent * trauma_type3_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
- 
-## Extract OR, assign proper labels and save PMV's OR for this specific model 
+
+## Extract OR, assign proper labels and save PMV's OR for this specific model
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
 or_hospdeath_PMV_traumanontbi_eICU_multivariate <- or_2[or_2[,1]=="PMV", c(1,5:9)]
@@ -314,6 +540,22 @@ htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 
 # Univariate analysis
 or_hospdeath_PMV_traumanottbi_eICU_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="trauma_type3_anyseq", output_name="PMV for Trauma not TBI")
+```
+
+## trauma_non_tbi + age(spline)
+
+```{r}
+final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma_type3_anyseq", "non-TBI trauma")
+
+hospdeath_age_spline_traumanontbi_eICU <- run_age_spline_model(
+  df = final_dataset_recategorized,
+  model_formula = inhospital_death ~ prolonged_mec_vent * trauma_type3_anyseq + age + sex + aps + charlson,
+  death_outcome = "inhospital_death",
+  output_name = "PMV for Trauma not TBI",
+  output_file = "data/eICU/or_hospdeath_PMV-TraumanotTBI_age-spline_eICU.csv"
+)
+
+or_hospdeath_PMV_traumanontbi_age_spline_eICU_multivariate <- hospdeath_age_spline_traumanontbi_eICU$or_pmv
 ```
 
 ## TBI
@@ -330,7 +572,7 @@ logreg <- glm(
   data = final_dataset_recategorized,
   family = binomial())
 
-## Extract OR, assign proper labels and save PMV's OR for this specific model 
+## Extract OR, assign proper labels and save PMV's OR for this specific model
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
 or_hospdeath_PMV_tbi_eICU_multivariate <- or_2[or_2[,1]=="PMV", c(1,5:9)]
@@ -342,6 +584,22 @@ htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 
 # Univariate analysis
 or_hospdeath_PMV_tbi_eICU_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="trauma_type3_anyseq", output_name="PMV for TBI Patients")
+```
+
+## TBI + age(spline)
+
+```{r}
+final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma_type3_anyseq", "TBI")
+
+hospdeath_age_spline_tbi_eICU <- run_age_spline_model(
+  df = final_dataset_recategorized,
+  model_formula = inhospital_death ~ prolonged_mec_vent * trauma_type3_anyseq + age + sex + aps + charlson,
+  death_outcome = "inhospital_death",
+  output_name = "PMV for TBI Patients",
+  output_file = "data/eICU/or_hospdeath_PMV-tbi_age-spline_eICU.csv"
+)
+
+or_hospdeath_PMV_tbi_age_spline_eICU_multivariate <- hospdeath_age_spline_tbi_eICU$or_pmv
 ```
 
 ## tbi_non_severe
@@ -357,8 +615,8 @@ logreg <- glm(
    inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
- 
-## Extract OR, assign proper labels and save PMV's OR for this specific model 
+
+## Extract OR, assign proper labels and save PMV's OR for this specific model
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
 or_hospdeath_PMV_tbinonsevere_eICU_multivariate <- or_2[or_2[,1]=="PMV", c(1,5:9)]
@@ -373,10 +631,26 @@ or_hospdeath_PMV_nonseveretbi_eICU_univariate <- univariate_analysis(df=final_da
 
 ```
 
+## tbi_non_severe + age(spline)
+
+```{r}
+final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma_type_anyseq", "non-severe TBI")
+
+hospdeath_age_spline_tbinonsevere_eICU <- run_age_spline_model(
+  df = final_dataset_recategorized,
+  model_formula = inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
+  death_outcome = "inhospital_death",
+  output_name = "PMV for TBI non-severe",
+  output_file = "data/eICU/or_hospdeath_PMV-TBInonsevere_age-spline_eICU.csv"
+)
+
+or_hospdeath_PMV_tbinonsevere_age_spline_eICU_multivariate <- hospdeath_age_spline_tbinonsevere_eICU$or_pmv
+```
+
 ## tbi_severe
 
 ```{r}
-# Multivariate Analysis 
+# Multivariate Analysis
 ## Recategorize "severe TBI" as reference level in trauma_type_anyseq variable
 final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma_type_anyseq", "severe TBI")
 
@@ -386,8 +660,8 @@ logreg <- glm(
    inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
   data = final_dataset_recategorized,
   family = binomial())
- 
-## Extract OR, assign proper labels and save PMV's OR for this specific model 
+
+## Extract OR, assign proper labels and save PMV's OR for this specific model
 or_1 <- extract_coef_pval_OR(logreg)
 or_2 <- or_transformation(or_1, dict_terms, variable_order)
 or_hospdeath_PMV_tbisevere_eICU_multivariate <- or_2[or_2[,1]=="PMV", c(1,5:9)]
@@ -401,6 +675,22 @@ htmlTable(or_2[,var_html], caption = caption_hospdeath_multivariable)
 or_hospdeath_PMV_severetbi_eICU_univariate <- univariate_analysis(df=final_dataset_recategorized, death_outcome="inhospital_death", df_column="trauma_type_anyseq", output_name="PMV for TBI severe")
 ```
 
+## tbi_severe + age(spline)
+
+```{r}
+final_dataset_recategorized <- recategorize_function(final_dataset_eICU, "trauma_type_anyseq", "severe TBI")
+
+hospdeath_age_spline_tbisevere_eICU <- run_age_spline_model(
+  df = final_dataset_recategorized,
+  model_formula = inhospital_death ~ prolonged_mec_vent * trauma_type_anyseq + age + sex + aps + charlson,
+  death_outcome = "inhospital_death",
+  output_name = "PMV for TBI severe",
+  output_file = "data/eICU/or_hospdeath_PMV-TBIsevere_age-spline_eICU.csv"
+)
+
+or_hospdeath_PMV_tbisevere_age_spline_eICU_multivariate <- hospdeath_age_spline_tbisevere_eICU$or_pmv
+```
+
 ## Summary
 
 ### Multivariate Analysis
@@ -410,23 +700,23 @@ or_hospdeath_PMV_severetbi_eICU_univariate <- univariate_analysis(df=final_datas
 eICU_or_hospdeath_PMV_multivariate <- rbind(
   or_hospdeath_PMV_allpopulation_eICU_multivariate,
   or_hospdeath_PMV_nontrauma_eICU_multivariate,
-  or_hospdeath_PMV_anytrauma_eICU_multivariate, 
+  or_hospdeath_PMV_anytrauma_eICU_multivariate,
   or_hospdeath_PMV_traumanontbi_eICU_multivariate,
   or_hospdeath_PMV_tbi_eICU_multivariate,
   or_hospdeath_PMV_tbinonsevere_eICU_multivariate,
   or_hospdeath_PMV_tbisevere_eICU_multivariate
-) %>% 
+) %>%
   mutate_if(is.numeric, round, 3)
 rownames(eICU_or_hospdeath_PMV_multivariate) <- NULL
 # Save OR table and print in console
 write.csv(eICU_or_hospdeath_PMV_multivariate,file.path(root_dir,'data/eICU/or_hospdeath_PMV_all-trauma_eICU.csv'))
-htmlTable(eICU_or_hospdeath_PMV_multivariate[,var_html], caption = "Multivariate Analysis. Odds Ratio and Confidence Intervals for factors associated with 1 Year-Mortality. All types of trauma. eICU Database")
+htmlTable(eICU_or_hospdeath_PMV_multivariate[,var_html], caption = "Multivariate Analysis. Odds Ratio and Confidence Intervals for factors associated with Hospital Mortality. All types of trauma. eICU Database")
 
 # Assign proper names to OR table
 eICU_or_hospdeath_PMV_multivariate_2 <- or_transformation(eICU_or_hospdeath_PMV_multivariate, dict_terms, variable_order)
 # Order and select OR table for building Forest Plot
-eICU_or_hospdeath_PMV_multivariate_3 <- eICU_or_hospdeath_PMV_multivariate_2 %>% 
-  filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")) %>% 
+eICU_or_hospdeath_PMV_multivariate_3 <- eICU_or_hospdeath_PMV_multivariate_2 %>%
+  filter(term %in% c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma")) %>%
   mutate(term = factor(term, levels = c("PMV - severe TBI", "PMV - non-severe TBI", "PMV - non-TBI trauma", "PMV - non-trauma"))) %>%
   arrange(term)
 
@@ -434,7 +724,7 @@ eICU_or_hospdeath_PMV_multivariate_3 <- eICU_or_hospdeath_PMV_multivariate_2 %>%
 adverse_protective_levels <- data.frame(adverse_protective = c("Positive Association", "Negative Association", "Inconclusive"))
 
 # Build the Forest plot
-fp_PMV_alltraumas_hospdeath_eICU <- ggplot(eICU_or_hospdeath_PMV_multivariate_3, 
+fp_PMV_alltraumas_hospdeath_eICU <- ggplot(eICU_or_hospdeath_PMV_multivariate_3,
        aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
   geom_point(size = 2, aes(color = adverse_protective)) +
   geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
@@ -444,7 +734,7 @@ fp_PMV_alltraumas_hospdeath_eICU <- ggplot(eICU_or_hospdeath_PMV_multivariate_3,
   scale_color_manual(
     values = c("#c0392b", "#27ae60", "gray70"),
     labels = c("Positive Association", "Negative Association", "Inconclusive"),
-    name = "Effect on Outcome", 
+    name = "Effect on Outcome",
     limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
   scale_x_continuous(limits = c(0, 6)) +
   theme(
@@ -464,6 +754,86 @@ fp_PMV_alltraumas_hospdeath_eICU
 ggsave(file.path(root_dir, 'figures/eICU/Forest_plot/fp_hospdeath_PMV_all-trauma_eICU.png'), plot=fp_PMV_alltraumas_hospdeath_eICU, width = 10, height = 4, dpi = 300)
 ```
 
+### Multivariate Analysis + age(spline)
+
+```{r}
+# Obtain combined table
+eICU_or_hospdeath_PMV_age_spline_multivariate <- rbind(
+  or_hospdeath_PMV_allpopulation_age_spline_eICU_multivariate,
+  or_hospdeath_PMV_nontrauma_age_spline_eICU_multivariate,
+  or_hospdeath_PMV_anytrauma_age_spline_eICU_multivariate,
+  or_hospdeath_PMV_traumanontbi_age_spline_eICU_multivariate,
+  or_hospdeath_PMV_tbi_age_spline_eICU_multivariate,
+  or_hospdeath_PMV_tbinonsevere_age_spline_eICU_multivariate,
+  or_hospdeath_PMV_tbisevere_age_spline_eICU_multivariate
+) %>%
+  mutate_if(is.numeric, round, 3)
+rownames(eICU_or_hospdeath_PMV_age_spline_multivariate) <- NULL
+
+# Save OR table and print in console
+write.csv(eICU_or_hospdeath_PMV_age_spline_multivariate,file.path(root_dir,'data/eICU/or_hospdeath_PMV_all-trauma_age-spline_eICU.csv'))
+htmlTable(eICU_or_hospdeath_PMV_age_spline_multivariate[,var_html], caption = "Multivariable Analysis with age(spline). Odds Ratio and Confidence Intervals for factors associated with Hospital Mortality. All types of trauma. eICU Database")
+
+# Order and select OR table for building Forest Plot
+eICU_or_hospdeath_PMV_age_spline_multivariate_3 <- eICU_or_hospdeath_PMV_age_spline_multivariate %>%
+  filter(term %in% c("PMV for TBI severe + age(spline)", "PMV for TBI non-severe + age(spline)", "PMV for Trauma not TBI + age(spline)", "PMV for non-Trauma + age(spline)")) %>%
+  mutate(term = factor(term, levels = c("PMV for TBI severe + age(spline)", "PMV for TBI non-severe + age(spline)", "PMV for Trauma not TBI + age(spline)", "PMV for non-Trauma + age(spline)"))) %>%
+  arrange(term)
+
+# Build the Forest plot
+fp_PMV_alltraumas_hospdeath_age_spline_eICU <- ggplot(eICU_or_hospdeath_PMV_age_spline_multivariate_3,
+       aes(x = OR, xmin = OR_lower, xmax = OR_upper, y = term)) +
+  geom_point(size = 2, aes(color = adverse_protective)) +
+  geom_errorbarh(height = 0.2, aes(color = adverse_protective)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Odds Ratio", y = NULL, title = "eICU. Outcome: Hospital Mortality + age(spline)") +
+  theme_minimal() +
+  scale_color_manual(
+    values = c("#c0392b", "#27ae60", "gray70"),
+    labels = c("Positive Association", "Negative Association", "Inconclusive"),
+    name = "Effect on Outcome",
+    limits = adverse_protective_levels$adverse_protective) + #establishes limits of color scale
+  scale_x_continuous(limits = c(0, 6)) +
+  theme(
+    plot.background = element_rect(fill = "white"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.ticks = element_blank(),
+    axis.text.x = element_text(color = "#2c3e50"),
+    axis.text.y = element_text(color = "#2c3e50"
+    ))
+fp_PMV_alltraumas_hospdeath_age_spline_eICU
+
+
+# Save the Forest plot as a PNG file
+ggsave(file.path(root_dir, 'figures/eICU/Forest_plot/fp_hospdeath_PMV_all-trauma_age-spline_eICU.png'), plot=fp_PMV_alltraumas_hospdeath_age_spline_eICU, width = 10, height = 4, dpi = 300)
+
+# Supplementary Table: GAM sensitivity comparison for in-hospital mortality (eICU).
+hospdeath_eICU_spline_comparison <- build_age_spline_comparison_table(
+  linear_or_list = list(
+    or_hospdeath_PMV_nontrauma_eICU_multivariate,
+    or_hospdeath_PMV_traumanontbi_eICU_multivariate,
+    or_hospdeath_PMV_tbinonsevere_eICU_multivariate,
+    or_hospdeath_PMV_tbisevere_eICU_multivariate
+  ),
+  spline_result_list = list(
+    hospdeath_age_spline_nontrauma_eICU,
+    hospdeath_age_spline_traumanontbi_eICU,
+    hospdeath_age_spline_tbinonsevere_eICU,
+    hospdeath_age_spline_tbisevere_eICU
+  ),
+  subgroup_labels = c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI"),
+  caption = paste(
+    "Supplementary Table Sz. Sensitivity analysis comparing PMV odds ratios for in-hospital",
+    "mortality under linear vs. penalized spline modeling of age. eICU cohort."
+  ),
+  output_dir = "data/eICU/tables",
+  save_name  = "suppl_hospdeath_PMV_spline-vs-linear_eICU"
+)
+```
+
 ### Univariate Analysis
 
 ```{r}
@@ -476,7 +846,7 @@ hospdeath_univariate_summary <- rbind(
   or_hospdeath_PMV_tbi_eICU_univariate,
   or_hospdeath_PMV_nonseveretbi_eICU_univariate,
   or_hospdeath_PMV_severetbi_eICU_univariate
-) %>% 
+) %>%
   mutate_if(is.numeric, round, 3)
 rownames(hospdeath_univariate_summary) <- NULL
 ## Save OR table and print in console
@@ -505,7 +875,7 @@ hospdeath_counts_summary <- rbind(
   tbi_summary,
   nonsevere_tbi_summary,
   severe_tbi_summary
-) %>% 
+) %>%
   mutate_if(is.numeric, round, 2)
 rownames(hospdeath_counts_summary) <- NULL
 ## Save OR table and print in console
@@ -784,11 +1154,11 @@ build_comparison_table_with_ci_eicu <- function(psm_list,
       "p-value"     = p_fmt
     )
 
-  htmlTable(
+  print(htmlTable(
     comparison,
     caption = sprintf(
       "Sensitivity analysis: Multivariable vs PSM - OR [95%% CI] for PMV on %s. eICU",
-      death_outcome))
+      death_outcome)))
 
   write.csv(
     comparison,

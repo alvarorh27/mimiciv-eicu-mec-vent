@@ -1937,6 +1937,185 @@ comparison_ci_hospdeath <- build_comparison_table_with_ci(
   root_dir      = root_dir
 )
 ```
+
+## Export PSM Supplementary Tables
+```{r}
+# ============================================================
+# EXPORT PSM SUPPLEMENTARY TABLES TO DOCX
+# Produces a single Word document with:
+#   - Table 1: PSM comparison (multivariable vs PSM) - 1-year mortality
+#   - Table 2: PSM comparison (multivariable vs PSM) - hospital mortality
+#   - Table 3: SMD balance summary - 1-year mortality
+#   - Table 4: SMD balance summary - hospital mortality
+# ============================================================
+
+make_comparison_flextable <- function(df, title_label) {
+
+  df_fmt <- df %>%
+    mutate(`Pairs (PSM)` = ifelse(is.na(`Pairs (PSM)`), "-", as.character(`Pairs (PSM)`)))
+
+  ft <- flextable(df_fmt) %>%
+    width(j = "Subgroup",    width = 1.5) %>%
+    width(j = "Analysis",    width = 1.8) %>%
+    width(j = "Pairs (PSM)", width = 0.9) %>%
+    width(j = "OR [95% CI]", width = 1.5) %>%
+    width(j = "p-value",     width = 0.8) %>%
+    bold(part = "header") %>%
+    bg(part = "header", bg = "#2c3e50") %>%
+    color(part = "header", color = "white") %>%
+    bg(i = seq(2, nrow(df_fmt), by = 2), bg = "#f2f2f2", part = "body") %>%
+    bold(i = which(df_fmt$Analysis == "Multivariable (original)"), part = "body") %>%
+    font(fontname = "Arial", part = "all") %>%
+    fontsize(size = 10, part = "all") %>%
+    fontsize(size = 11, part = "header") %>%
+    align(j = c("Pairs (PSM)", "OR [95% CI]", "p-value"), align = "center", part = "all") %>%
+    align(j = c("Subgroup", "Analysis"), align = "left", part = "all") %>%
+    border_outer(part = "all", fp_border(color = "#2c3e50", width = 1.5)) %>%
+    border_inner_h(part = "body", fp_border(color = "#cccccc", width = 0.5)) %>%
+    set_caption(caption = title_label, style = "Table Caption") %>%
+    merge_v(j = "Subgroup") %>%
+    valign(j = "Subgroup", valign = "top", part = "body")
+
+  return(ft)
+}
+
+make_balance_flextable <- function(psm_list, group_labels, outcome_label) {
+
+  group_order <- c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")
+
+  balance_rows <- bind_rows(mapply(function(psm_obj, label) {
+    if (is.null(psm_obj)) {
+      return(data.frame(
+        subgroup   = label,
+        variable   = "- not performed",
+        SMD_before = NA_real_,
+        SMD_after  = NA_real_,
+        balanced   = NA,
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    psm_obj$smd_table %>%
+      mutate(subgroup = label) %>%
+      filter(variable != "distance") %>%
+      select(subgroup, variable, SMD_before, SMD_after, balanced)
+  }, psm_list, group_labels, SIMPLIFY = FALSE))
+
+  df_fmt <- balance_rows %>%
+    mutate(
+      subgroup = factor(subgroup, levels = group_order),
+      variable = case_when(
+        variable == "age"       ~ "Age",
+        variable == "sexMale"   ~ "Sex (male)",
+        variable == "sexFemale" ~ "Sex (female)",
+        variable == "sexF"      ~ "Sex (female)",
+        variable == "sexM"      ~ "Sex (male)",
+        variable == "apsiii"    ~ "APS III",
+        variable == "charlson"  ~ "Charlson",
+        TRUE                    ~ variable
+      ),
+      balanced = ifelse(is.na(balanced), "-", ifelse(balanced, "Yes", "No"))
+    ) %>%
+    arrange(subgroup) %>%
+    select(subgroup, variable, SMD_before, SMD_after, balanced) %>%
+    rename(
+      "Subgroup"             = subgroup,
+      "Variable"             = variable,
+      "SMD before"           = SMD_before,
+      "SMD after"            = SMD_after,
+      "Balanced (|SMD|<0.1)" = balanced
+    )
+
+  ft <- flextable(df_fmt) %>%
+    width(j = "Subgroup",             width = 1.4) %>%
+    width(j = "Variable",             width = 1.4) %>%
+    width(j = "SMD before",           width = 1.0) %>%
+    width(j = "SMD after",            width = 1.0) %>%
+    width(j = "Balanced (|SMD|<0.1)", width = 1.2) %>%
+    bold(part = "header") %>%
+    bg(part = "header", bg = "#2c3e50") %>%
+    color(part = "header", color = "white") %>%
+    bg(i = seq(2, nrow(df_fmt), by = 2), bg = "#f2f2f2", part = "body") %>%
+    bg(i = which(df_fmt$`Balanced (|SMD|<0.1)` == "No"), bg = "#fde8e8", part = "body") %>%
+    font(fontname = "Arial", part = "all") %>%
+    fontsize(size = 10, part = "all") %>%
+    fontsize(size = 11, part = "header") %>%
+    align(j = c("SMD before", "SMD after", "Balanced (|SMD|<0.1)"),
+          align = "center", part = "all") %>%
+    border_outer(part = "all", fp_border(color = "#2c3e50", width = 1.5)) %>%
+    border_inner_h(part = "body", fp_border(color = "#cccccc", width = 0.5)) %>%
+    set_caption(
+      caption = sprintf("Covariate balance (SMD) before and after PSM - %s. MIMIC-IV",
+                        outcome_label),
+      style = "Table Caption") %>%
+    merge_v(j = "Subgroup") %>%
+    valign(j = "Subgroup", valign = "top", part = "body")
+
+  return(ft)
+}
+
+psm_group_labels <- c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")
+
+ft_deathyear <- make_comparison_flextable(
+  as.data.frame(comparison_ci_deathyear),
+  "Supplementary Table. Sensitivity analysis: Multivariable vs PSM - OR for PMV on 1-year mortality. MIMIC-IV."
+)
+
+ft_hospdeath <- make_comparison_flextable(
+  as.data.frame(comparison_ci_hospdeath),
+  "Supplementary Table. Sensitivity analysis: Multivariable vs PSM - OR for PMV on hospital mortality. MIMIC-IV."
+)
+
+ft_balance_deathyear <- make_balance_flextable(
+  psm_list = list(
+    psm_deathyear_nontrauma,
+    psm_deathyear_nontbi,
+    psm_deathyear_nonseveretbi,
+    psm_deathyear_severetbi
+  ),
+  group_labels  = psm_group_labels,
+  outcome_label = "1-year mortality"
+)
+
+ft_balance_hospdeath <- make_balance_flextable(
+  psm_list = list(
+    psm_hospdeath_nontrauma,
+    psm_hospdeath_nontbi,
+    psm_hospdeath_nonseveretbi,
+    psm_hospdeath_severetbi
+  ),
+  group_labels  = psm_group_labels,
+  outcome_label = "hospital mortality"
+)
+
+psm_docx_dir <- file.path(root_dir, "data/mimic-iv/tables")
+dir.create(psm_docx_dir, recursive = TRUE, showWarnings = FALSE)
+
+psm_doc <- read_docx() %>%
+  body_set_default_section(
+    prop_section(
+      page_size    = page_size(width = 8.3, height = 11.7, orient = "portrait"),
+      page_margins = page_mar(top = 1, bottom = 1, left = 1, right = 1)
+    )
+  ) %>%
+  body_add_par(
+    "Supplementary Material - PSM Sensitivity Analysis (MIMIC-IV)",
+    style = "heading 1"
+  ) %>%
+  body_add_par("", style = "Normal") %>%
+  body_add_flextable(ft_deathyear) %>%
+  body_add_break() %>%
+  body_add_flextable(ft_hospdeath) %>%
+  body_add_break() %>%
+  body_add_flextable(ft_balance_deathyear) %>%
+  body_add_break() %>%
+  body_add_flextable(ft_balance_hospdeath)
+
+psm_docx_path <- file.path(psm_docx_dir, "supplementary_PSM_tables_MIMICIV.docx")
+print(psm_doc, target = psm_docx_path)
+cat(sprintf("Saved: %s\n", psm_docx_path))
+```
+
 ## Comparative Forest Plot
 ```{r}
 # ============================================================

@@ -1115,17 +1115,20 @@ build_comparison_table_with_ci_eicu <- function(psm_list,
                                                 death_outcome,
                                                 root_dir) {
 
+  group_order <- c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")
+
   psm_rows <- bind_rows(lapply(psm_list, function(x) {
     if (is.null(x)) return(NULL)
     x$or_pmv %>%
       mutate(
         analysis = "PSM (matched)",
-        OR_CI    = sprintf("%.2f [%.2f-%.2f]", OR, OR_lower, OR_upper),
+        OR_CI    = sprintf("%.2f [%.2f\u2013%.2f]", OR, OR_lower, OR_upper),
         p_fmt    = ifelse(p.value < 0.001, "<0.001", sprintf("%.3f", p.value))
       )
   }))
 
   original_rows <- bind_rows(mapply(function(df_or, label) {
+    pval <- df_or$p.value
     data.frame(
       group           = label,
       outcome         = death_outcome,
@@ -1134,16 +1137,17 @@ build_comparison_table_with_ci_eicu <- function(psm_list,
       OR              = df_or$OR,
       OR_lower        = df_or$OR_lower,
       OR_upper        = df_or$OR_upper,
-      p.value         = df_or$p.value,
+      p.value         = pval,
       analysis        = "Multivariable (original)",
-      OR_CI           = sprintf("%.2f [%.2f-%.2f]", df_or$OR, df_or$OR_lower, df_or$OR_upper),
-      p_fmt           = ifelse(df_or$p.value < 0.001, "<0.001", sprintf("%.3f", df_or$p.value)),
+      OR_CI           = sprintf("%.2f [%.2f\u2013%.2f]",
+                                df_or$OR, df_or$OR_lower, df_or$OR_upper),
+      p_fmt           = ifelse(pval < 0.001, "<0.001", sprintf("%.3f", pval)),
       stringsAsFactors = FALSE
     )
   }, original_or_list, group_labels, SIMPLIFY = FALSE))
 
   comparison <- bind_rows(original_rows, psm_rows) %>%
-    mutate(group = factor(group, levels = group_labels)) %>%
+    mutate(group = factor(group, levels = group_order)) %>%
     arrange(group, analysis) %>%
     select(group, analysis, n_pairs, OR_CI, p_fmt) %>%
     rename(
@@ -1154,10 +1158,13 @@ build_comparison_table_with_ci_eicu <- function(psm_list,
       "p-value"     = p_fmt
     )
 
+  cat(sprintf("\n========== Comparison table with CI: %s (eICU) ==========\n", death_outcome))
+  print(comparison, row.names = FALSE)
+
   print(htmlTable(
     comparison,
     caption = sprintf(
-      "Sensitivity analysis: Multivariable vs PSM - OR [95%% CI] for PMV on %s. eICU",
+      "Sensitivity analysis: Multivariable vs PSM \u2014 OR [95%% CI] for PMV on %s. eICU",
       death_outcome)))
 
   write.csv(
@@ -1190,6 +1197,170 @@ comparison_ci_hospdeath_eicu <- build_comparison_table_with_ci_eicu(
   death_outcome = "inhospital_death",
   root_dir      = root_dir
 )
+```
+
+## Export PSM Supplementary Tables
+```{r}
+make_comparison_flextable_eicu <- function(df, title_label) {
+  df_fmt <- df %>%
+    mutate(`Pairs (PSM)` = ifelse(is.na(`Pairs (PSM)`), "\u2014",
+                                  as.character(`Pairs (PSM)`)))
+
+  flextable(df_fmt) %>%
+    width(j = "Subgroup",    width = 1.5) %>%
+    width(j = "Analysis",    width = 1.8) %>%
+    width(j = "Pairs (PSM)", width = 0.9) %>%
+    width(j = "OR [95% CI]", width = 1.5) %>%
+    width(j = "p-value",     width = 0.8) %>%
+    bold(part = "header") %>%
+    bg(part = "header", bg = "#2c3e50") %>%
+    color(part = "header", color = "white") %>%
+    bg(i = seq(2, nrow(df_fmt), by = 2), bg = "#f2f2f2", part = "body") %>%
+    bold(i = which(df_fmt$Analysis == "Multivariable (original)"), part = "body") %>%
+    font(fontname = "Arial", part = "all") %>%
+    fontsize(size = 10, part = "all") %>%
+    fontsize(size = 11, part = "header") %>%
+    align(j = c("Pairs (PSM)", "OR [95% CI]", "p-value"), align = "center", part = "all") %>%
+    align(j = c("Subgroup", "Analysis"), align = "left", part = "all") %>%
+    border_outer(part = "all", fp_border(color = "#2c3e50", width = 1.5)) %>%
+    border_inner_h(part = "body", fp_border(color = "#cccccc", width = 0.5)) %>%
+    set_caption(caption = title_label, style = "Table Caption") %>%
+    merge_v(j = "Subgroup") %>%
+    valign(j = "Subgroup", valign = "top", part = "body")
+}
+
+make_balance_flextable_eicu <- function(psm_list, group_labels, outcome_label) {
+  group_order <- c("non-trauma", "non-TBI trauma", "non-severe TBI", "severe TBI")
+
+  balance_rows <- bind_rows(mapply(function(psm_obj, label) {
+    if (is.null(psm_obj)) {
+      return(data.frame(
+        subgroup   = label,
+        variable   = "\u2014 not performed",
+        SMD_before = NA_real_,
+        SMD_after  = NA_real_,
+        balanced   = NA,
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    psm_obj$smd_table %>%
+      mutate(subgroup = label) %>%
+      filter(variable != "distance") %>%
+      select(subgroup, variable, SMD_before, SMD_after, balanced)
+  }, psm_list, group_labels, SIMPLIFY = FALSE))
+
+  df_fmt <- balance_rows %>%
+    mutate(
+      subgroup = factor(subgroup, levels = group_order),
+      variable = case_when(
+        variable == "age"        ~ "Age",
+        variable == "sexMale"    ~ "Sex (male)",
+        variable == "sexFemale"  ~ "Sex (female)",
+        variable == "sexUnknown" ~ "Sex (unknown)",
+        variable == "aps"        ~ "APS",
+        variable == "charlson"   ~ "Charlson",
+        TRUE                     ~ variable
+      ),
+      balanced = ifelse(is.na(balanced), "\u2014", ifelse(balanced, "Yes", "No"))
+    ) %>%
+    arrange(subgroup) %>%
+    select(subgroup, variable, SMD_before, SMD_after, balanced) %>%
+    rename(
+      "Subgroup"             = subgroup,
+      "Variable"             = variable,
+      "SMD before"           = SMD_before,
+      "SMD after"            = SMD_after,
+      "Balanced (|SMD|<0.1)" = balanced
+    )
+
+  flextable(df_fmt) %>%
+    width(j = "Subgroup",             width = 1.4) %>%
+    width(j = "Variable",             width = 1.4) %>%
+    width(j = "SMD before",           width = 1.0) %>%
+    width(j = "SMD after",            width = 1.0) %>%
+    width(j = "Balanced (|SMD|<0.1)", width = 1.2) %>%
+    bold(part = "header") %>%
+    bg(part = "header", bg = "#2c3e50") %>%
+    color(part = "header", color = "white") %>%
+    bg(i = seq(2, nrow(df_fmt), by = 2), bg = "#f2f2f2", part = "body") %>%
+    bg(i = which(df_fmt$`Balanced (|SMD|<0.1)` == "No"), bg = "#fde8e8", part = "body") %>%
+    font(fontname = "Arial", part = "all") %>%
+    fontsize(size = 10, part = "all") %>%
+    fontsize(size = 11, part = "header") %>%
+    align(j = c("SMD before", "SMD after", "Balanced (|SMD|<0.1)"),
+          align = "center", part = "all") %>%
+    border_outer(part = "all", fp_border(color = "#2c3e50", width = 1.5)) %>%
+    border_inner_h(part = "body", fp_border(color = "#cccccc", width = 0.5)) %>%
+    set_caption(
+      caption = sprintf("Covariate balance (SMD) before and after PSM \u2014 %s. eICU",
+                        outcome_label),
+      style = "Table Caption") %>%
+    merge_v(j = "Subgroup") %>%
+    valign(j = "Subgroup", valign = "top", part = "body")
+}
+
+ft_hospdeath_eicu <- make_comparison_flextable_eicu(
+  as.data.frame(comparison_ci_hospdeath_eicu),
+  "Supplementary Table. Sensitivity analysis: Multivariable vs PSM \u2014 OR for PMV on hospital mortality. eICU."
+)
+
+ft_balance_hospdeath_eicu <- make_balance_flextable_eicu(
+  psm_list = list(
+    psm_hospdeath_nontrauma_eicu,
+    psm_hospdeath_nontbi_eicu,
+    psm_hospdeath_nonseveretbi_eicu,
+    psm_hospdeath_severetbi_eicu
+  ),
+  group_labels  = psm_group_labels,
+  outcome_label = "hospital mortality"
+)
+
+psm_docx_dir_eicu <- file.path(root_dir, "data/eICU/tables")
+dir.create(psm_docx_dir_eicu, recursive = TRUE, showWarnings = FALSE)
+
+doc_eicu <- read_docx() %>%
+  body_set_default_section(
+    prop_section(
+      page_size    = page_size(width = 8.3, height = 11.7, orient = "portrait"),
+      page_margins = page_mar(top = 1, bottom = 1, left = 1, right = 1)
+    )
+  ) %>%
+  body_add_par(
+    "Supplementary Material \u2014 PSM Sensitivity Analysis (eICU)",
+    style = "heading 1"
+  ) %>%
+  body_add_par("", style = "Normal") %>%
+  body_add_flextable(ft_hospdeath_eicu) %>%
+  body_add_break() %>%
+  body_add_flextable(ft_balance_hospdeath_eicu)
+
+output_path_eicu <- file.path(psm_docx_dir_eicu, "supplementary_PSM_tables_eICU.docx")
+output_path_eicu <- tryCatch(
+  {
+    print(doc_eicu, target = output_path_eicu)
+    output_path_eicu
+  },
+  error = function(e) {
+    if (!grepl(" is open", conditionMessage(e), fixed = TRUE)) {
+      stop(e)
+    }
+
+    fallback_path <- sub(
+      "\\.docx$",
+      paste0("_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".docx"),
+      output_path_eicu
+    )
+
+    warning(sprintf(
+      "Target docx is open and could not be overwritten. Saving a timestamped copy instead: %s",
+      fallback_path
+    ))
+    print(doc_eicu, target = fallback_path)
+    fallback_path
+  }
+)
+cat(sprintf("Saved: %s\n", output_path_eicu))
 ```
 
 ## Comparative Forest Plot
